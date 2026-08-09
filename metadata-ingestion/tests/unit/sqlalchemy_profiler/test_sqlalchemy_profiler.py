@@ -1,36 +1,18 @@
 """Unit tests for SQLAlchemyProfiler."""
 
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 import sqlalchemy as sa
 from sqlalchemy import Column, Float, Integer, String, create_engine
 
-from datahub.configuration.common import ConfigurationError
-from datahub.ingestion.source.ge_profiling_config import (
-    ProfilingConfig,
-)
+from datahub.ingestion.source.ge_profiling_config import ProfilingConfig
 from datahub.ingestion.source.profiling.common import Cardinality, ProfilerRequest
 from datahub.ingestion.source.sql.sql_report import SQLSourceReport
 from datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler import (
     SQLAlchemyProfiler,
 )
 from datahub.ingestion.source.sqlalchemy_profiler.type_mapping import ProfilerDataType
-
-# Env var read by get_profiling_force_transactional() (env_vars.py). Kept as a
-# constant here so the kill-switch tests don't drift on the literal string.
-FORCE_TRANSACTIONAL_ENV = "DATAHUB_PROFILING_FORCE_TRANSACTIONAL"
-
-
-@pytest.fixture(autouse=True)
-def _clean_profiling_force_transactional_env(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Ensure DATAHUB_PROFILING_FORCE_TRANSACTIONAL never leaks across tests — the
-    # kill switch is read at resolution time, so a leftover value would silently
-    # force transactional profiling for any test that does not set it explicitly.
-    monkeypatch.delenv(FORCE_TRANSACTIONAL_ENV, raising=False)
 
 
 @pytest.fixture
@@ -222,6 +204,11 @@ class TestSQLAlchemyProfiler:
                 "permission denied"
             )
             mock_get_adapter.return_value = mock_adapter
+            # The per-table path now calls adapter.profiling_isolation_level(); a bare
+            # MagicMock returns a MagicMock (not None), which would be passed into
+            # execution_options as an isolation level. Pin it to None so the level
+            # block is skipped, matching these tests' pre-feature behaviour.
+            mock_adapter.profiling_isolation_level.return_value = None
 
             # Should return tuple (request, None) and log warning, not raise
             result_request, result_profile = profiler._generate_profile_from_request(
@@ -263,6 +250,11 @@ class TestSQLAlchemyProfiler:
                 "permission denied"
             )
             mock_get_adapter.return_value = mock_adapter
+            # The per-table path now calls adapter.profiling_isolation_level(); a bare
+            # MagicMock returns a MagicMock (not None), which would be passed into
+            # execution_options as an isolation level. Pin it to None so the level
+            # block is skipped, matching these tests' pre-feature behaviour.
+            mock_adapter.profiling_isolation_level.return_value = None
 
             # Should re-raise the exception
             with pytest.raises(PermissionError, match="permission denied"):
@@ -293,6 +285,11 @@ class TestSQLAlchemyProfiler:
                 "database error", None, None
             )
             mock_get_adapter.return_value = mock_adapter
+            # The per-table path now calls adapter.profiling_isolation_level(); a bare
+            # MagicMock returns a MagicMock (not None), which would be passed into
+            # execution_options as an isolation level. Pin it to None so the level
+            # block is skipped, matching these tests' pre-feature behaviour.
+            mock_adapter.profiling_isolation_level.return_value = None
 
             # Should return tuple (request, None) and log warning, not raise
             result_request, result_profile = profiler._generate_profile_from_request(
@@ -333,6 +330,11 @@ class TestSQLAlchemyProfiler:
                 "database error", None, None
             )
             mock_get_adapter.return_value = mock_adapter
+            # The per-table path now calls adapter.profiling_isolation_level(); a bare
+            # MagicMock returns a MagicMock (not None), which would be passed into
+            # execution_options as an isolation level. Pin it to None so the level
+            # block is skipped, matching these tests' pre-feature behaviour.
+            mock_adapter.profiling_isolation_level.return_value = None
 
             # Should re-raise the exception
             with pytest.raises(sa.exc.OperationalError):
@@ -363,6 +365,11 @@ class TestSQLAlchemyProfiler:
                 "connection lost"
             )
             mock_get_adapter.return_value = mock_adapter
+            # The per-table path now calls adapter.profiling_isolation_level(); a bare
+            # MagicMock returns a MagicMock (not None), which would be passed into
+            # execution_options as an isolation level. Pin it to None so the level
+            # block is skipped, matching these tests' pre-feature behaviour.
+            mock_adapter.profiling_isolation_level.return_value = None
 
             # Should return tuple (request, None) and log warning, not raise
             result_request, result_profile = profiler._generate_profile_from_request(
@@ -399,6 +406,11 @@ class TestSQLAlchemyProfiler:
             mock_adapter = MagicMock()
             mock_adapter.setup_profiling.side_effect = RuntimeError("unexpected error")
             mock_get_adapter.return_value = mock_adapter
+            # The per-table path now calls adapter.profiling_isolation_level(); a bare
+            # MagicMock returns a MagicMock (not None), which would be passed into
+            # execution_options as an isolation level. Pin it to None so the level
+            # block is skipped, matching these tests' pre-feature behaviour.
+            mock_adapter.profiling_isolation_level.return_value = None
 
             # Should return tuple (request, None) and log warning, not raise
             result_request, result_profile = profiler._generate_profile_from_request(
@@ -435,6 +447,11 @@ class TestSQLAlchemyProfiler:
             mock_adapter = MagicMock()
             mock_adapter.setup_profiling.side_effect = RuntimeError("unexpected error")
             mock_get_adapter.return_value = mock_adapter
+            # The per-table path now calls adapter.profiling_isolation_level(); a bare
+            # MagicMock returns a MagicMock (not None), which would be passed into
+            # execution_options as an isolation level. Pin it to None so the level
+            # block is skipped, matching these tests' pre-feature behaviour.
+            mock_adapter.profiling_isolation_level.return_value = None
 
             # Should re-raise the exception
             with pytest.raises(RuntimeError, match="unexpected error"):
@@ -461,6 +478,11 @@ class TestSQLAlchemyProfiler:
             mock_adapter = MagicMock()
             mock_adapter.setup_profiling.side_effect = RuntimeError("test error")
             mock_get_adapter.return_value = mock_adapter
+            # The per-table path now calls adapter.profiling_isolation_level(); a bare
+            # MagicMock returns a MagicMock (not None), which would be passed into
+            # execution_options as an isolation level. Pin it to None so the level
+            # block is skipped, matching these tests' pre-feature behaviour.
+            mock_adapter.profiling_isolation_level.return_value = None
 
             # Execute profiling (will fail)
             profiler._generate_profile_from_request(None, request)
@@ -667,6 +689,11 @@ class TestSQLAlchemyProfiler:
             )
 
             mock_get_adapter.return_value = mock_adapter
+            # The per-table path now calls adapter.profiling_isolation_level(); a bare
+            # MagicMock returns a MagicMock (not None), which would be passed into
+            # execution_options as an isolation level. Pin it to None so the level
+            # block is skipped, matching these tests' pre-feature behaviour.
+            mock_adapter.profiling_isolation_level.return_value = None
 
             # Attempt to profile - should return None for failed profiling
             result_request, result_profile = profiler._generate_profile_from_request(
@@ -738,6 +765,11 @@ class TestSQLAlchemyProfiler:
             mock_adapter.setup_profiling.return_value = mock_context
             mock_adapter.cleanup.return_value = None
             mock_get_adapter.return_value = mock_adapter
+            # The per-table path now calls adapter.profiling_isolation_level(); a bare
+            # MagicMock returns a MagicMock (not None), which would be passed into
+            # execution_options as an isolation level. Pin it to None so the level
+            # block is skipped, matching these tests' pre-feature behaviour.
+            mock_adapter.profiling_isolation_level.return_value = None
 
             # Attempt to profile - should return basic profile
             result_request, result_profile = profiler._generate_profile_from_request(
@@ -766,97 +798,29 @@ class TestSQLAlchemyProfiler:
 
 
 class TestProfilingIsolationLevel:
-    """The profiler must apply the resolved isolation level to each per-table connection.
+    """The per-table connection receives the adapter's profiling isolation level."""
 
-    The level is resolved ONCE at construction (see __init__) — not per table — so these
-    tests force a level via the `profiling_isolation_level` config escape hatch rather than
-    mocking `adapter.profiling_isolation_level()` per table (which is no longer called
-    per-table).
-    """
-
-    def test_resolve_isolation_level_adapter_default_wins(
-        self, sqlite_engine, mock_report
-    ):
-        # No config override -> the adapter's default wins. Directly exercises the
-        # resolver (the constructor already calls it once with the real adapter; this
-        # re-calls it with a mocked adapter to assert precedence in isolation).
-        config = ProfilingConfig(enabled=True)
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=mock_report,
-            config=config,
-            platform="sqlite",
-            env="TEST",
-        )
-        mock_adapter = MagicMock()
-        mock_adapter.profiling_isolation_level.return_value = "AUTOCOMMIT"
-        with patch(
-            "datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler.get_adapter"
-        ) as mock_get_adapter:
-            mock_get_adapter.return_value = mock_adapter
-            assert profiler._resolve_profiling_isolation_level() == "AUTOCOMMIT"
-
-    def test_resolve_isolation_level_override_wins(self, sqlite_engine, mock_report):
-        # A concrete override wins over the adapter default.
-        config = ProfilingConfig(enabled=True, isolation_level="READ UNCOMMITTED")
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=mock_report,
-            config=config,
-            platform="sqlite",
-            env="TEST",
-        )
-        mock_adapter = MagicMock()
-        mock_adapter.profiling_isolation_level.return_value = "AUTOCOMMIT"
-        with patch(
-            "datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler.get_adapter"
-        ) as mock_get_adapter:
-            mock_get_adapter.return_value = mock_adapter
-            assert profiler._resolve_profiling_isolation_level() == "READ UNCOMMITTED"
-
-    def test_resolve_isolation_level_transactional_sentinel_clears(
-        self, sqlite_engine, mock_report
-    ):
-        # The TRANSACTIONAL sentinel clears the level to None (falls back to
-        # transactional), even when the adapter would return AUTOCOMMIT.
-        config = ProfilingConfig(enabled=True, isolation_level="TRANSACTIONAL")
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=mock_report,
-            config=config,
-            platform="sqlite",
-            env="TEST",
-        )
-        mock_adapter = MagicMock()
-        mock_adapter.profiling_isolation_level.return_value = "AUTOCOMMIT"
-        with patch(
-            "datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler.get_adapter"
-        ) as mock_get_adapter:
-            mock_get_adapter.return_value = mock_adapter
-            assert profiler._resolve_profiling_isolation_level() is None
-
-    def test_applies_autocommit_when_level_configured(self, profiler):
-        # Force AUTOCOMMIT via the escape hatch; the per-table connection must receive it.
+    def test_applies_level_when_adapter_returns_one(self, profiler):
+        # When the adapter's hook returns a non-None level, conn.execution_options
+        # is called with that level during a table profile, and the object returned
+        # by that call is what flows downstream into adapter.setup_profiling.
         profiler.config.catch_exceptions = True
-        # The level is resolved at construction (see `_resolve_profiling_isolation_level`);
-        # AUTOCOMMIT is accepted by sqlite's dialect, so resolution yields
-        # "AUTOCOMMIT". Set directly here to skip the per-table execution_options
-        # round-trip (these tests assert on the applied option, not on resolution).
-        profiler._profiling_isolation_level = "AUTOCOMMIT"
-        mock_adapter = MagicMock()
-        mock_conn = MagicMock()
-
         with (
             patch.object(profiler, "base_engine") as mock_engine,
             patch(
                 "datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler.get_adapter"
             ) as mock_get_adapter,
         ):
+            mock_conn = MagicMock()
             mock_engine.connect.return_value.__enter__.return_value = mock_conn
+            mock_adapter = MagicMock()
+            mock_adapter.profiling_isolation_level.return_value = "AUTOCOMMIT"
+            # Short-circuit the downstream profiling path; the assertion is about
+            # the connection object that reached setup_profiling.
             mock_adapter.setup_profiling.side_effect = RuntimeError("short-circuit")
             mock_get_adapter.return_value = mock_adapter
 
-            result = profiler._generate_single_profile(
+            profiler._generate_single_profile(
                 query_combiner=MagicMock(),
                 pretty_name="my_db.my_table",
                 schema="my_db",
@@ -864,575 +828,42 @@ class TestProfilingIsolationLevel:
                 platform="mysql",
             )
 
-        assert result is None  # short-circuited
         mock_conn.execution_options.assert_called_once_with(
             isolation_level="AUTOCOMMIT"
         )
-        # The configured connection (execution_options result) is what flows
-        # downstream into setup_profiling, not the raw checked-out connection.
+        # The branched connection returned by execution_options is what flows
+        # downstream, not the raw checked-out connection.
         assert (
             mock_adapter.setup_profiling.call_args[0][1]
             is mock_conn.execution_options.return_value
         )
 
     def test_does_not_apply_options_when_level_none(self, profiler):
-        # Default: no escape hatch, sqlite's GenericAdapter returns None → no execution_options.
+        # When the adapter's hook returns None, conn.execution_options is not called
+        # with an isolation_level argument at all — the checked-out connection flows
+        # downstream unchanged.
         profiler.config.catch_exceptions = True
-        assert profiler._profiling_isolation_level is None
-        mock_adapter = MagicMock()
-        mock_conn = MagicMock()
-
         with (
             patch.object(profiler, "base_engine") as mock_engine,
             patch(
                 "datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler.get_adapter"
             ) as mock_get_adapter,
         ):
+            mock_conn = MagicMock()
             mock_engine.connect.return_value.__enter__.return_value = mock_conn
+            mock_adapter = MagicMock()
+            mock_adapter.profiling_isolation_level.return_value = None
             mock_adapter.setup_profiling.side_effect = RuntimeError("short-circuit")
             mock_get_adapter.return_value = mock_adapter
 
-            result = profiler._generate_single_profile(
+            profiler._generate_single_profile(
                 query_combiner=MagicMock(),
                 pretty_name="my_db.my_table",
                 schema="my_db",
                 table="my_table",
-                platform="sqlite",
-            )
-
-        assert result is None  # short-circuited
-        mock_conn.execution_options.assert_not_called()
-        # With no level, the raw checked-out connection flows downstream
-        # (execution_options was never called, so no .return_value indirection).
-        assert mock_adapter.setup_profiling.call_args[0][1] is mock_conn
-
-    def test_invalid_level_fails_loudly_at_first_table(
-        self, sqlite_engine, mock_report
-    ):
-        # An invalid level name is fatal: it fails identically on every table, so
-        # it raises ConfigurationError rather than degrading to a per-table
-        # warning. Construction does NOT validate the level (validation is lazy
-        # so a transient connect blip cannot gate a whole database); the bad
-        # level is stored unvalidated and surfaces on the first per-table
-        # `conn.execution_options(...)`, where the call site converts
-        # ArgumentError to ConfigurationError and the outer
-        # `except ConfigurationError: raise` re-raises it ahead of the broad
-        # `except Exception`. generate_profiles submits every request to a
-        # ThreadPoolExecutor up front and the executor's __exit__ waits for all
-        # submitted futures, so every table is attempted before the run unwinds.
-        config = ProfilingConfig(
-            enabled=True,
-            isolation_level="BOGUS",
-        )
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=mock_report,
-            config=config,
-            platform="sqlite",
-            env="TEST",
-        )
-        # Construction succeeded; the level is stored unvalidated.
-        assert profiler._profiling_isolation_level == "BOGUS"
-        with pytest.raises(ConfigurationError):
-            profiler._generate_single_profile(
-                query_combiner=MagicMock(),
-                pretty_name="main.test_table",
-                schema="main",
-                table="test_table",
-                platform="sqlite",
-            )
-
-    def test_level_reaches_real_dialect(self, sqlite_engine, mock_report):
-        # The only test proving the option actually reaches a dialect. Uses the
-        # real sqlite engine (not a mock) and a level that round-trips through
-        # get_isolation_level(). NOTE: "AUTOCOMMIT" is a SQLAlchemy pseudo-level NOT
-        # reported by get_isolation_level() on sqlite (returns SERIALIZABLE — verified on
-        # 1.4.44), so it cannot be used to prove round-trip; "READ UNCOMMITTED" does
-        # round-trip and proves execution_options applied the level to the real DBAPI
-        # connection.
-        captured: list[str] = []
-        config = ProfilingConfig(
-            enabled=True,
-            isolation_level="READ UNCOMMITTED",
-        )
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=mock_report,
-            config=config,
-            platform="sqlite",
-            env="TEST",
-        )
-        mock_adapter = MagicMock()
-
-        def _capture_and_short_circuit(_ctx: Any, conn: Any) -> None:
-            # Capture the real isolation level on the connection that flowed downstream,
-            # then raise to short-circuit the rest of the profile flow.
-            captured.append(conn.get_isolation_level())
-            raise RuntimeError("short-circuit")
-
-        mock_adapter.setup_profiling.side_effect = _capture_and_short_circuit
-
-        with patch(
-            "datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler.get_adapter"
-        ) as mock_get_adapter:
-            mock_get_adapter.return_value = mock_adapter
-            result = profiler._generate_single_profile(
-                query_combiner=MagicMock(),
-                pretty_name="main.test_table",
-                schema="main",
-                table="test_table",
-                platform="sqlite",
-            )
-
-        assert result is None  # short-circuited
-        assert captured == ["READ UNCOMMITTED"]
-
-    def test_mysql_platform_resolves_to_autocommit_at_construction(
-        self, sqlite_engine, mock_report
-    ):
-        # Wiring: platform="mysql" -> get_adapter returns MySQLAdapter ->
-        # profiling_isolation_level() returns "AUTOCOMMIT" -> resolved at construction.
-        # No escape hatch, no mock of get_adapter: this proves the adapter factory and the
-        # hook are wired together end-to-end (the tests above mock get_adapter; this one
-        # does not). Resolution does not open a connection, so the sqlite base_engine
-        # being a different dialect than mysql is fine — the level is only validated
-        # later on the per-table path.
-        config = ProfilingConfig(enabled=True)
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=mock_report,
-            config=config,
-            platform="mysql",
-            env="TEST",
-        )
-        assert profiler._profiling_isolation_level == "AUTOCOMMIT"
-
-    def test_postgres_platforms_resolve_to_autocommit_at_construction(
-        self, sqlite_engine, mock_report
-    ):
-        # Postgres counterpart to the mysql wiring test. get_adapter accepts both
-        # "postgres" and "postgresql" as platform strings, so both spellings must
-        # resolve to AUTOCOMMIT — a regression here would silently drop Postgres
-        # back into the long profiling transaction.
-        for platform in ("postgres", "postgresql"):
-            config = ProfilingConfig(enabled=True)
-            profiler = SQLAlchemyProfiler(
-                conn=sqlite_engine,
-                report=mock_report,
-                config=config,
-                platform=platform,
-                env="TEST",
-            )
-            assert profiler._profiling_isolation_level == "AUTOCOMMIT", platform
-
-    def test_transactional_sentinel_forces_transactional(
-        self, sqlite_engine, mock_report
-    ):
-        # Escape hatch: TRANSACTIONAL overrides an adapter that would otherwise return
-        # AUTOCOMMIT (mysql), forcing back to None (default transactional behavior). This
-        # is the MySQL-behind-a-proxy-that-rejects-AUTOCOMMIT scenario the field exists for.
-        config = ProfilingConfig(
-            enabled=True,
-            isolation_level="TRANSACTIONAL",
-        )
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=mock_report,
-            config=config,
-            platform="mysql",
-            env="TEST",
-        )
-        assert profiler._profiling_isolation_level is None
-
-    def test_transactional_sentinel_lowercase_is_normalized(
-        self, sqlite_engine, mock_report
-    ):
-        # field_validator strips + upper-cases before the sentinel comparison, so
-        # "transactional " (lowercase, trailing space) normalizes to "TRANSACTIONAL"
-        # and maps to None -- without the validator this would miss the sentinel and be
-        # handed to the dialect as an invalid isolation level.
-        config = ProfilingConfig(
-            enabled=True,
-            isolation_level="transactional ",
-        )
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=mock_report,
-            config=config,
-            platform="mysql",
-            env="TEST",
-        )
-        assert profiler._profiling_isolation_level is None
-
-    def test_isolation_level_reset_on_pool_checkin(self, sqlite_engine, mock_report):
-        # Upstream-assumption guard (tests SQLAlchemy, not DataHub): setting
-        # isolation_level via execution_options must not leak across
-        # checkin/checkout. SQLAlchemy registers a finalize_callback on the
-        # _ConnectionRecord that resets the isolation level on checkin, so the
-        # underlying DBAPI connection returns to the pool's default. The guard
-        # matters because base_engine is shared with metadata extraction — a leak
-        # here would corrupt the non-profiling path — but the property being
-        # asserted is SQLAlchemy's pool behaviour, not this PR's code. Uses "READ
-        # UNCOMMITTED" because it round-trips through get_isolation_level() on
-        # sqlite (AUTOCOMMIT is a SQLAlchemy pseudo-level that sqlite reports as
-        # SERIALIZABLE — see test_level_reaches_real_dialect).
-        from sqlalchemy.pool import QueuePool
-
-        engine = create_engine(
-            "sqlite:///:memory:",
-            poolclass=QueuePool,
-            pool_size=1,
-            max_overflow=0,
-        )
-        try:
-            # Checkout a connection and set READ UNCOMMITTED.
-            with engine.connect() as conn:
-                conn.execution_options(isolation_level="READ UNCOMMITTED")
-                # The branched connection reports the override.
-                assert conn.get_isolation_level() == "READ UNCOMMITTED"
-            # After checkin, the next checkout must NOT inherit the override.
-            with engine.connect() as conn:
-                assert conn.get_isolation_level() != "READ UNCOMMITTED"
-        finally:
-            engine.dispose()
-
-    def test_override_on_non_opt_in_platform_warns(self, sqlite_engine, mock_report):
-        # A non-TRANSACTIONAL recipe override on a platform whose adapter returns
-        # None (e.g. snowflake, which overrides setup_profiling and creates
-        # session-scoped temp resources) emits a report.warning naming the
-        # platform. Warn — do not reject — so a legitimate opt-in on e.g.
-        # Redshift/MSSQL still works.
-        config = ProfilingConfig(
-            enabled=True,
-            isolation_level="AUTOCOMMIT",
-        )
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=mock_report,
-            config=config,
-            platform="snowflake",
-            env="TEST",
-        )
-        # Construction triggers _resolve_profiling_isolation_level, which warns.
-        mock_report.warning.assert_called_once()
-        kwargs = mock_report.warning.call_args.kwargs
-        assert "snowflake" in kwargs["message"]
-        assert profiler._profiling_isolation_level == "AUTOCOMMIT"
-
-    def test_override_on_opt_in_platform_does_not_warn(
-        self, sqlite_engine, mock_report
-    ):
-        # An override on a platform whose adapter DOES opt in (mysql returns
-        # AUTOCOMMIT) must NOT warn — the override is a normal escape hatch there.
-        config = ProfilingConfig(
-            enabled=True,
-            isolation_level="READ COMMITTED",
-        )
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=mock_report,
-            config=config,
-            platform="mysql",
-            env="TEST",
-        )
-        mock_report.warning.assert_not_called()
-        assert profiler._profiling_isolation_level == "READ COMMITTED"
-
-    def test_transactional_sentinel_on_non_opt_in_platform_does_not_warn(
-        self, sqlite_engine, mock_report
-    ):
-        # The TRANSACTIONAL sentinel is a no-op on a non-opt-in platform (it
-        # clears the level to None, which is already the adapter default), so it
-        # must NOT warn. The warning is only for non-TRANSACTIONAL overrides.
-        config = ProfilingConfig(
-            enabled=True,
-            isolation_level="TRANSACTIONAL",
-        )
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=mock_report,
-            config=config,
-            platform="snowflake",
-            env="TEST",
-        )
-        mock_report.warning.assert_not_called()
-        assert profiler._profiling_isolation_level is None
-
-
-class TestProfilingForceTransactional:
-    """DATAHUB_PROFILING_FORCE_TRANSACTIONAL kill switch.
-
-    The switch is the first check in _resolve_profiling_isolation_level and wins
-    unconditionally — over the recipe field and over the adapter default. The
-    autouse `_clean_profiling_force_transactional_env` fixture guarantees the
-    variable is unset between tests. These tests use a real SQLSourceReport so the
-    forced-transactional / degraded fields read back as their real defaults.
-    """
-
-    @pytest.fixture
-    def real_report(self):
-        return SQLSourceReport()
-
-    def test_switch_resolves_level_to_none_on_mysql(
-        self, sqlite_engine, real_report, monkeypatch
-    ):
-        # On a platform whose adapter defaults to AUTOCOMMIT (mysql), the switch
-        # forces the level to None — the AUTOCOMMIT default is discarded.
-        monkeypatch.setenv(FORCE_TRANSACTIONAL_ENV, "true")
-        config = ProfilingConfig(enabled=True)
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=real_report,
-            config=config,
-            platform="mysql",
-            env="TEST",
-        )
-        assert profiler._profiling_isolation_level is None
-        assert profiler.report.profiling_isolation_level_forced_transactional is True
-        assert (
-            profiler._profiling_isolation_level_source
-            == "DATAHUB_PROFILING_FORCE_TRANSACTIONAL"
-        )
-
-    def test_switch_wins_over_explicit_recipe_pin(
-        self, sqlite_engine, real_report, monkeypatch
-    ):
-        # The switch beats everything: an explicit recipe pin (e.g. READ COMMITTED
-        # on Redshift) is discarded when the switch is active. This is correct for
-        # an emergency override, and the operator must be able to see it happened.
-        monkeypatch.setenv(FORCE_TRANSACTIONAL_ENV, "true")
-        config = ProfilingConfig(enabled=True, isolation_level="READ COMMITTED")
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=real_report,
-            config=config,
-            platform="mysql",
-            env="TEST",
-        )
-        assert profiler._profiling_isolation_level is None
-        assert profiler.report.profiling_isolation_level_forced_transactional is True
-
-    def test_switch_visible_in_report_when_active(
-        self, sqlite_engine, real_report, monkeypatch
-    ):
-        # With the switch on, nothing warns and nothing degrades, so a run is
-        # silently different from the same recipe on a node without the variable.
-        # The report field is the only signal that catches this fleet-wide.
-        monkeypatch.setenv(FORCE_TRANSACTIONAL_ENV, "true")
-        config = ProfilingConfig(enabled=True)
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=real_report,
-            config=config,
-            platform="mysql",
-            env="TEST",
-        )
-        assert profiler.report.profiling_isolation_level_forced_transactional is True
-        assert profiler.report.profiling_isolation_level_degraded is False
-        assert profiler.report.profiling_isolation_level_degraded_tables == 0
-
-    def test_switch_unset_uses_adapter_default(
-        self, sqlite_engine, real_report, monkeypatch
-    ):
-        # With the switch absent, the adapter default (mysql AUTOCOMMIT) wins and
-        # the forced-transactional flag stays False.
-        monkeypatch.delenv(FORCE_TRANSACTIONAL_ENV, raising=False)
-        config = ProfilingConfig(enabled=True)
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=real_report,
-            config=config,
-            platform="mysql",
-            env="TEST",
-        )
-        assert profiler._profiling_isolation_level == "AUTOCOMMIT"
-        assert profiler.report.profiling_isolation_level_forced_transactional is False
-
-    def test_unrecognized_switch_value_warned_and_ignored(
-        self, sqlite_engine, real_report, monkeypatch, caplog
-    ):
-        # An unrecognized value is warned about (via env_vars.py logger) and
-        # treated as unset — a typo that reads as "off" is the worst outcome for
-        # an emergency switch, so it must not silently force transactional.
-        monkeypatch.setenv(FORCE_TRANSACTIONAL_ENV, "yes_please")
-        config = ProfilingConfig(enabled=True)
-        with caplog.at_level("WARNING", logger="datahub.configuration.env_vars"):
-            profiler = SQLAlchemyProfiler(
-                conn=sqlite_engine,
-                report=real_report,
-                config=config,
                 platform="mysql",
-                env="TEST",
-            )
-        assert profiler._profiling_isolation_level == "AUTOCOMMIT"
-        assert profiler.report.profiling_isolation_level_forced_transactional is False
-        assert any(
-            FORCE_TRANSACTIONAL_ENV in rec.message and "Unrecognized" in rec.message
-            for rec in caplog.records
-        )
-
-
-class TestProfilingIsolationLevelFailures:
-    """The two failure modes when applying the resolved level per table.
-
-    An invalid level name (ArgumentError) is fatal — it fails identically on
-    every table. A level the server rejects (a raw DBAPI error that
-    execution_options does not wrap) is not fatal: the first refusal warns once,
-    latches, and profiling continues without the level (under the pre-change
-    transactional behavior). Splitting on determinism, not on exception
-    hierarchy, keeps a stale pooled connection from killing the whole run.
-    """
-
-    @staticmethod
-    def _make_degraded_profiler(
-        sqlite_engine, mock_report, monkeypatch, level="AUTOCOMMIT"
-    ):
-        monkeypatch.delenv(FORCE_TRANSACTIONAL_ENV, raising=False)
-        config = ProfilingConfig(enabled=True, isolation_level=level)
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=mock_report,
-            config=config,
-            platform="sqlite",
-            env="TEST",
-        )
-        profiler.config.catch_exceptions = True
-
-        class _DriverError(Exception):
-            pass
-
-        # _isolation_level_set_errors is resolved at construction from the real
-        # sqlite dbapi.Error; override it so _DriverError is caught by the
-        # driver-error handler (simulating a real driver error subclassing the
-        # resolved dbapi.Error).
-        profiler._isolation_level_set_errors = (_DriverError,)
-        # Pre-set the counter fields to real scalars so += / = track real values
-        # instead of MagicMock attributes.
-        mock_report.profiling_isolation_level_degraded = False
-        mock_report.profiling_isolation_level_degraded_tables = 0
-        return profiler, _DriverError
-
-    def test_driver_error_warns_degrades_and_names_transactional_fix(
-        self, sqlite_engine, mock_report, monkeypatch
-    ):
-        # A raw DBAPI error from execution_options (server refused the level)
-        # warns once, latches, and proceeds without the level — it does NOT
-        # raise. The warning message names the TRANSACTIONAL remedy and the
-        # source label. catch_exceptions=True must not swallow it because no
-        # ConfigurationError is raised.
-        profiler, _DriverError = self._make_degraded_profiler(
-            sqlite_engine, mock_report, monkeypatch
-        )
-        with (
-            patch.object(profiler, "base_engine") as mock_engine,
-            patch(
-                "datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler.get_adapter"
-            ) as mock_get_adapter,
-        ):
-            mock_conn = MagicMock()
-            mock_engine.connect.return_value.__enter__.return_value = mock_conn
-            mock_conn.execution_options.side_effect = _DriverError("proxy rejected")
-            mock_adapter = MagicMock()
-            # Short-circuit the downstream profiling path so the test stays
-            # focused on the isolation-level block.
-            mock_adapter.setup_profiling.side_effect = RuntimeError("short-circuit")
-            mock_get_adapter.return_value = mock_adapter
-
-            result = profiler._generate_single_profile(
-                query_combiner=MagicMock(),
-                pretty_name="main.test_table",
-                schema="main",
-                table="test_table",
-                platform="sqlite",
             )
 
-        assert result is None  # short-circuited downstream
-        assert mock_report.profiling_isolation_level_degraded is True
-        assert mock_report.profiling_isolation_level_degraded_tables == 1
-        # The driver-error warning fired exactly once (the short-circuit warning
-        # is a separate title).
-        degraded_warnings = [
-            call
-            for call in mock_report.warning.call_args_list
-            if call.kwargs.get("title")
-            == "Profiling isolation level rejected by the database"
-        ]
-        assert len(degraded_warnings) == 1
-        message = degraded_warnings[0].kwargs["message"]
-        assert "TRANSACTIONAL" in message
-        assert "transactional behavior" in message
-        # The context carries the level, the source label, and the table.
-        context = degraded_warnings[0].kwargs["context"]
-        assert "main.test_table" in context
-        assert "AUTOCOMMIT" in context
-
-    def test_driver_error_latches_so_skip_path_also_counts(
-        self, sqlite_engine, mock_report, monkeypatch
-    ):
-        # Both assertions together catch a broken implementation: a counter
-        # that only counts rejections reads 1 forever (passes the "warning once"
-        # check alone), and a latch that never engages warns every table (passes
-        # the "count > 1" check alone). Either assertion alone passes under a
-        # broken implementation; together they fail.
-        profiler, _DriverError = self._make_degraded_profiler(
-            sqlite_engine, mock_report, monkeypatch
-        )
-        with (
-            patch.object(profiler, "base_engine") as mock_engine,
-            patch(
-                "datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler.get_adapter"
-            ) as mock_get_adapter,
-        ):
-            mock_conn = MagicMock()
-            mock_engine.connect.return_value.__enter__.return_value = mock_conn
-            mock_conn.execution_options.side_effect = _DriverError("proxy rejected")
-            mock_adapter = MagicMock()
-            mock_adapter.setup_profiling.side_effect = RuntimeError("short-circuit")
-            mock_get_adapter.return_value = mock_adapter
-
-            for i in range(2):
-                profiler._generate_single_profile(
-                    query_combiner=MagicMock(),
-                    pretty_name=f"main.t{i}",
-                    schema="main",
-                    table=f"t{i}",
-                    platform="sqlite",
-                )
-
-        # The refusal latches: the driver-error warning fires once, not per table.
-        degraded_warnings = [
-            call
-            for call in mock_report.warning.call_args_list
-            if call.kwargs.get("title")
-            == "Profiling isolation level rejected by the database"
-        ]
-        assert len(degraded_warnings) == 1
-        # Both tables are counted — the first in the except branch, the second on
-        # the skip path — so the counter exceeds one.
-        assert mock_report.profiling_isolation_level_degraded_tables == 2
-        assert mock_report.profiling_isolation_level_degraded is True
-
-    def test_invalid_level_still_produces_invalid_name_message(
-        self, sqlite_engine, mock_report, monkeypatch
-    ):
-        # An invalid level name (ArgumentError) is fatal — it fails identically on
-        # every table — so it raises ConfigurationError naming the recipe field.
-        monkeypatch.delenv(FORCE_TRANSACTIONAL_ENV, raising=False)
-        config = ProfilingConfig(enabled=True, isolation_level="BOGUS")
-        profiler = SQLAlchemyProfiler(
-            conn=sqlite_engine,
-            report=mock_report,
-            config=config,
-            platform="sqlite",
-            env="TEST",
-        )
-        with pytest.raises(ConfigurationError) as exc_info:
-            profiler._generate_single_profile(
-                query_combiner=MagicMock(),
-                pretty_name="main.test_table",
-                schema="main",
-                table="test_table",
-                platform="sqlite",
-            )
-        assert "Invalid profiling.isolation_level" in str(exc_info.value)
-        assert "BOGUS" in str(exc_info.value)
+        mock_conn.execution_options.assert_not_called()
+        # The raw checked-out connection flows downstream unchanged.
+        assert mock_adapter.setup_profiling.call_args[0][1] is mock_conn

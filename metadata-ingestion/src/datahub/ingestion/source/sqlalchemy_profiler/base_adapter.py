@@ -121,13 +121,36 @@ class PlatformAdapter(ABC):
         """
         Isolation level to apply to the profiling connection, or None to keep the default.
 
-        Opt-in is per-adapter by exact platform match in `get_adapter`
-        (`adapters/__init__.py`); the base default is None. Do NOT invert the base
-        default: `GenericAdapter` is the fallback for every unlisted platform, so
-        inverting would silently apply AUTOCOMMIT to engines that reject it.
+        Why this exists (the cause, not "the database holds an implicit transaction"): the
+        DBAPI driver disables autocommit on connect (pymysql issues `SET AUTOCOMMIT = 0`;
+        psycopg2 begins a transaction on first use), and SQLAlchemy never COMMITs a read-only
+        profiling session, so the transaction stays open for the connection's life. Postgres
+        then sits idle-in-transaction, holding back the xmin horizon and blocking VACUUM;
+        MySQL pins an InnoDB REPEATABLE-READ read view and grows the history/undo list.
+        Returning "AUTOCOMMIT" makes each profiling statement self-contained. This routes
+        through the dialect's autocommit API, which is the correct mechanism (vs.
+        `connect_args` autocommit, which relies on the server default and is not
+        deterministic).
 
-        See metadata-ingestion/docs/dev_guides/sql_profiles.md for the rationale and
-        the trade-off.
+        Opt-in is per-adapter and the base default is None. Only adapters that create no
+        session-scoped temp resources — they override neither `setup_profiling` nor `cleanup`
+        — should override this. MySQL and Postgres qualify. Adapters that do create temp
+        resources are left at the default; autocommit is probably safe for them, since those
+        resources are session- rather than transaction-scoped, but that has not been reviewed.
+
+        SQLAlchemy reverts the isolation level when a connection is returned to the pool, so
+        the caller must re-apply this on each checked-out connection rather than once per
+        engine.
+
+        Accepted correctness trade-off: under AUTOCOMMIT, `min`, `max`, `COUNT(*)`,
+        `COUNT(col)`, `uniqueCount`, quantiles, histograms, and sample values each come from
+        different snapshots, so a profile can be internally inconsistent on a concurrently
+        written table — e.g. `uniqueCount` > `rowCount` (uniqueCount is emitted raw, not
+        clamped), or a histogram bucketed on a stale `min`/`max` containing out-of-range
+        values. The clamps that exist (`null_count = max(0, row_count - non_null_count)`,
+        `nullProportion`/`uniqueProportion` via `min(1, ...)`) prevent nonsensical ratios, not
+        inconsistent counts. This is explicitly accepted and is safer than the long-transaction
+        alternative.
 
         Returns:
             A SQLAlchemy isolation level name (e.g. "AUTOCOMMIT"), or None. Kept as

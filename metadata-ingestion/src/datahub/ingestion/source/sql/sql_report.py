@@ -34,18 +34,6 @@ class DetailedProfilerReportMixin:
         default_factory=int_top_k_dict
     )
 
-    # True when DATAHUB_PROFILING_FORCE_TRANSACTIONAL disabled the AUTOCOMMIT default
-    # for this run. Distinct from the degraded fields, which mean the database refused
-    # the level.
-    profiling_isolation_level_forced_transactional: bool = False
-
-    # True when the database refused the requested profiling isolation level.
-    profiling_isolation_level_degraded: bool = False
-    # Tables profiled without the requested isolation level, i.e. under the previous
-    # transactional behavior. Not a failure count — these profiles are correct — and
-    # not a count of rejections, which is always one because the refusal latches.
-    profiling_isolation_level_degraded_tables: int = 0
-
 
 @dataclass
 class SQLSourceReport(

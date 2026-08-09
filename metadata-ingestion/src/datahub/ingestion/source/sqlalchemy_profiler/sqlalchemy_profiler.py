@@ -17,7 +17,6 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Type,
     Union,
 )
 
@@ -27,16 +26,11 @@ import sqlalchemy.types as sa_types
 from dateutil import parser as date_parser
 from sqlalchemy.engine import Connection, Engine
 
-from datahub.configuration.common import ConfigurationError
-from datahub.configuration.env_vars import get_profiling_force_transactional
 from datahub.emitter import mce_builder
 from datahub.emitter.mce_builder import get_sys_time
 from datahub.ingestion.graph.client import get_default_graph
 from datahub.ingestion.graph.config import ClientMode
-from datahub.ingestion.source.ge_profiling_config import (
-    TRANSACTIONAL,
-    ProfilingConfig,
-)
+from datahub.ingestion.source.ge_profiling_config import ProfilingConfig
 from datahub.ingestion.source.profiling.common import (
     Cardinality,
     convert_to_cardinality,
@@ -477,101 +471,6 @@ class SQLAlchemyProfiler:
             )
 
         self.platform = platform.lower()
-
-        # Resolve the profiling isolation level once here, not per table. Hoisted
-        # into a method so it is unit-testable; the per-table path only re-applies
-        # the resolved level (see the `conn.execution_options` call in
-        # `_generate_single_profile`). `_profiling_isolation_level_source` records
-        # which input supplied the level so the per-table error/warning names it.
-        self._profiling_isolation_level_source: Optional[str] = None
-        self._profiling_isolation_level = self._resolve_profiling_isolation_level()
-
-        # PEP 249 requires every driver to expose an `Error` base class. Resolving it
-        # once lets the per-table path tell a driver-level refusal apart from an
-        # invalid level name. Falls back to Exception when the dialect exposes no real
-        # dbapi module; broad is acceptable here because this path warns and continues
-        # rather than failing the run.
-        dbapi = getattr(self.base_engine.dialect, "dbapi", None)
-        dbapi_error = getattr(dbapi, "Error", None)
-        self._isolation_level_set_errors: Tuple[Type[BaseException], ...] = (
-            (dbapi_error,)
-            if isinstance(dbapi_error, type) and issubclass(dbapi_error, BaseException)
-            else (Exception,)
-        )
-
-        # Set when the server refuses the level. Written from worker threads without a
-        # lock: the race is bounded by the concurrent-write window, so at worst a few
-        # extra tables attempt the set before it latches. A lock on the profiling hot
-        # path to make an advisory flag exact would cost more than the drift.
-        self._isolation_level_degraded = False
-
-    def _resolve_profiling_isolation_level(self) -> Optional[str]:
-        """Resolve the profiling isolation level for this source's profiling connections.
-
-        Precedence: the ``DATAHUB_PROFILING_FORCE_TRANSACTIONAL`` kill switch beats
-        everything; below it, the recipe field ``profiling.isolation_level`` beats
-        the adapter default.
-
-        The MySQL/Postgres default is ``AUTOCOMMIT`` because the DBAPI driver
-        disables autocommit on connect and SQLAlchemy never COMMITs a read-only
-        profiling session, so without it the transaction pins an InnoDB read view
-        (MySQL) / holds Postgres idle-in-transaction and blocks VACUUM. The base
-        default is ``None`` and must NOT be inverted: ``GenericAdapter`` is the
-        fallback for every unlisted platform, so inverting would silently apply
-        AUTOCOMMIT to engines that reject it.
-
-        A non-TRANSACTIONAL recipe override on a platform whose adapter returned
-        ``None`` warns (does not reject) — the platform typically overrides
-        ``setup_profiling`` to create session-scoped temp resources that AUTOCOMMIT
-        may corrupt, but a legitimate opt-in on e.g. Redshift/MSSQL must still work.
-        """
-        # Kill switch: wins unconditionally, ahead of the recipe field. Resolves to
-        # None (transactional) and discards any explicit pin, including an unrelated
-        # one such as isolation_level: READ COMMITTED on Redshift — correct for an
-        # override that beats everything. Read through env_vars.py so the read is
-        # discoverable alongside every other DataHub env var.
-        if get_profiling_force_transactional() is True:
-            logger.info(
-                "DATAHUB_PROFILING_FORCE_TRANSACTIONAL is set; profiling will run "
-                "transactionally (AUTOCOMMIT default disabled) for this source."
-            )
-            self.report.profiling_isolation_level_forced_transactional = True
-            self._profiling_isolation_level_source = (
-                "DATAHUB_PROFILING_FORCE_TRANSACTIONAL"
-            )
-            return None
-
-        adapter = get_adapter(self.platform, self.config, self.report, self.base_engine)
-        adapter_default = adapter.profiling_isolation_level()
-
-        # Recipe field (already normalized by the field_validator).
-        override = self.config.isolation_level
-        if override is not None:
-            self._profiling_isolation_level_source = "profiling.isolation_level"
-            if override == TRANSACTIONAL:
-                return None
-            if adapter_default is None:
-                self._warn_excluded_platform(override)
-            return override
-
-        # Adapter default.
-        self._profiling_isolation_level_source = (
-            f"adapter default for platform {self.platform!r}"
-        )
-        return adapter_default
-
-    def _warn_excluded_platform(self, level: str) -> None:
-        """Warn that an override is set on a platform whose adapter does not opt in."""
-        self.report.warning(
-            title="profiling.isolation_level set on a platform that does not opt in",
-            message=(
-                f"profiling.isolation_level={level!r} is set on platform "
-                f"{self.platform!r}, whose adapter does not opt in to AUTOCOMMIT. The "
-                "adapter overrides setup_profiling and may create session-scoped temp "
-                "resources; AUTOCOMMIT can corrupt those resources. Set this only if "
-                "you have verified it is safe for this platform."
-            ),
-        )
 
     def _get_columns_to_profile(self, table: sa.Table, dataset_name: str) -> List[str]:
         """Get list of columns to profile based on config and patterns."""
@@ -1695,68 +1594,21 @@ class SQLAlchemyProfiler:
             row_count=row_count,
         )
 
-        # Get platform-specific adapter. The isolation LEVEL is resolved once at
-        # construction (see __init__); only the adapter object is fetched per table here.
+        # Get platform-specific adapter
         adapter = get_adapter(platform, self.config, self.report, self.base_engine)
 
         with PerfTimer() as timer:
             try:
                 logger.info(f"Profiling {pretty_name}")
                 with self.base_engine.connect() as conn:
-                    level = self._profiling_isolation_level
-                    if level is not None:
-                        # Rebind is required: on SQLAlchemy 1.4 non-future engines
-                        # (setup.py pins sqlalchemy>=1.4.39,<2), Connection.execution_options
-                        # returns a branched copy carrying the new option rather than
-                        # mutating in place, so the returned object is the one that must
-                        # flow downstream into adapter.setup_profiling(context, conn).
-                        source = self._profiling_isolation_level_source
-                        if self._isolation_level_degraded:
-                            # The server already refused this level; skip the round trip.
-                            self.report.profiling_isolation_level_degraded_tables += 1
-                        else:
-                            try:
-                                conn = conn.execution_options(isolation_level=level)
-                            except sa.exc.ArgumentError as e:
-                                # The name is not a valid isolation level for this
-                                # dialect. Fails identically on every table, so it stays
-                                # fatal — the broad `except Exception` below would
-                                # otherwise swallow it into one warning per table.
-                                raise ConfigurationError(
-                                    f"Invalid {source}={level!r}"
-                                ) from e
-                            except self._isolation_level_set_errors as e:
-                                # The name was valid but the server refused to set it.
-                                # Could be a proxy refusing AUTOCOMMIT, could be a dead
-                                # socket — the type cannot tell them apart, so warn once
-                                # and proceed without the level. Profiles are still
-                                # correct, just produced under the pre-change
-                                # transactional behavior.
-                                self._isolation_level_degraded = True
-                                self.report.profiling_isolation_level_degraded = True
-                                self.report.profiling_isolation_level_degraded_tables += 1
-                                self.report.warning(
-                                    title="Profiling isolation level rejected by the database",
-                                    message=(
-                                        "The database refused the requested profiling "
-                                        "isolation level. Profiling continues under the "
-                                        "previous transactional behavior, which holds one "
-                                        "transaction open per table. Set "
-                                        "profiling.isolation_level: TRANSACTIONAL to "
-                                        "make this explicit."
-                                    ),
-                                    context=f"{pretty_name}: level={level!r} from {source}",
-                                    exc=e,
-                                )
-                                # pymysql assigns `autocommit_mode` before sending
-                                # `SET AUTOCOMMIT`, so when the send fails the client flag
-                                # says True while the server still says False. It stays out
-                                # of step until the connection is re-established
-                                # (`connect()` re-applies it) — and because we latch, we
-                                # never retry, so it persists for the life of the pooled
-                                # connection. Harmless: nothing reads `autocommit_mode`
-                                # after connect, `commit`/`rollback` send unconditionally,
-                                # and `get_autocommit()` reads server status.
+                    isolation_level = adapter.profiling_isolation_level()
+                    if isolation_level is not None:
+                        # Rebind: under SQLAlchemy 1.x legacy mode this returns a shallow
+                        # "branched" copy, so the returned object is the one that must flow
+                        # downstream into adapter.setup_profiling(context, conn). Applying
+                        # it per checkout is required — SQLAlchemy reverts the isolation
+                        # level when a connection is returned to the pool.
+                        conn = conn.execution_options(isolation_level=isolation_level)
                     # Setup profiling using platform adapter
                     # This handles temp tables, sampling, and creates sql_table
                     try:
@@ -1966,14 +1818,6 @@ class SQLAlchemyProfiler:
                     self.times_taken.append(time_taken)
                     return profile
 
-            except ConfigurationError:
-                # An invalid `profiling.isolation_level` name is converted to
-                # ConfigurationError at the call site above. Re-raise it ahead of
-                # the broad handlers below: ConfigurationError is not raised
-                # anywhere else in the per-table profiling path, so it cannot fire
-                # incidentally, and the operator gets an error naming the config
-                # key instead of a raw dialect message.
-                raise
             except (
                 sa.exc.SQLAlchemyError,
                 ConnectionError,
