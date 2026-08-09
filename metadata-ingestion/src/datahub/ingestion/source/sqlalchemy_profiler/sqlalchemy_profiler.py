@@ -472,6 +472,52 @@ class SQLAlchemyProfiler:
 
         self.platform = platform.lower()
 
+        # Resolve the profiling isolation level once, here. The adapter chooses the level
+        # (AUTOCOMMIT for MySQL/Postgres); the recipe field can only turn it off
+        # (TRANSACTIONAL -> None, enforced by the config validator), so a non-None override
+        # always means "transactional". Eager validation catches a dialect that rejects the
+        # adapter-chosen level (e.g. a proxy that disallows AUTOCOMMIT) up front. On either
+        # failure mode we degrade to None with a report warning rather than crashing the run:
+        # crashing here would surface as a raw constructor error only for MySQL/Postgres
+        # (the block is skipped when level is None), and the per-table path reports real
+        # connectivity failures with table context anyway. A surfaced warning is not the
+        # "silent skip" the original commit argued against — it is visible to operators.
+        adapter = get_adapter(platform, self.config, self.report, self.base_engine)
+        level = adapter.profiling_isolation_level()
+        if self.config.profiling_isolation_level is not None:
+            level = None
+        if level is not None:
+            try:
+                with self.base_engine.connect() as conn:
+                    conn.execution_options(isolation_level=level)
+            except sa.exc.ArgumentError as e:
+                self.report.warning(
+                    title="Profiling isolation level rejected by dialect",
+                    message=(
+                        "The profiling isolation level was rejected by the dialect; "
+                        "profiling will run under the default transactional behavior. "
+                        "Set profiling.profiling_isolation_level: TRANSACTIONAL on this "
+                        "source to silence this warning."
+                    ),
+                    context=f"platform={platform!r} level={level!r}",
+                    exc=e,
+                )
+                level = None
+            except (sa.exc.SQLAlchemyError, OSError) as e:
+                self.report.warning(
+                    title="Profiling isolation level validation failed",
+                    message=(
+                        "Could not validate the profiling isolation level against the "
+                        "database; profiling will run under the default transactional "
+                        "behavior. Set profiling.profiling_isolation_level: "
+                        "TRANSACTIONAL on this source to silence this warning."
+                    ),
+                    context=f"platform={platform!r} level={level!r}",
+                    exc=e,
+                )
+                level = None
+        self._profiling_isolation_level = level
+
     def _get_columns_to_profile(self, table: sa.Table, dataset_name: str) -> List[str]:
         """Get list of columns to profile based on config and patterns."""
         if not self.config.any_field_level_metrics_enabled():
@@ -1601,14 +1647,20 @@ class SQLAlchemyProfiler:
             try:
                 logger.info(f"Profiling {pretty_name}")
                 with self.base_engine.connect() as conn:
-                    isolation_level = adapter.profiling_isolation_level()
-                    if isolation_level is not None:
-                        # Rebind: under SQLAlchemy 1.x legacy mode this returns a shallow
-                        # "branched" copy, so the returned object is the one that must flow
-                        # downstream into adapter.setup_profiling(context, conn). Applying
-                        # it per checkout is required — SQLAlchemy reverts the isolation
-                        # level when a connection is returned to the pool.
-                        conn = conn.execution_options(isolation_level=isolation_level)
+                    if self._profiling_isolation_level is not None:
+                        # Rebind is required: `Connection.execution_options` returns the
+                        # connection object that carries the new option, and that object is
+                        # the one that must flow downstream into
+                        # `adapter.setup_profiling(context, conn)`. Under SQLAlchemy 1.x
+                        # legacy mode the call returns a shallow "branched" copy; under
+                        # `future=True` / SQLAlchemy 2.0 it returns the same connection. The
+                        # rebind is correct and harmless under both semantics, so it is
+                        # version-agnostic. Applying the option per checkout is required:
+                        # SQLAlchemy reverts the isolation level when a connection is
+                        # returned to the pool.
+                        conn = conn.execution_options(
+                            isolation_level=self._profiling_isolation_level
+                        )
                     # Setup profiling using platform adapter
                     # This handles temp tables, sampling, and creates sql_table
                     try:
