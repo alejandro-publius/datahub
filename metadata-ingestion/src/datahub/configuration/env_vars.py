@@ -420,6 +420,28 @@ def get_dataset_urn_to_lower() -> str:
     return os.getenv("DATAHUB_DATASET_URN_TO_LOWER", "false")
 
 
+def get_profiling_force_transactional() -> Optional[bool]:
+    """Force SQL profiling to run transactionally, disabling the AUTOCOMMIT default.
+
+    Returns None when unset or unrecognized. Unrecognized values are warned about
+    rather than silently ignored: this is an emergency switch, so a typo that reads
+    as "off" is the worst available outcome.
+    """
+    raw = os.getenv("DATAHUB_PROFILING_FORCE_TRANSACTIONAL", "").strip().lower()
+    if not raw:
+        return None
+    if raw in ("true", "1", "yes"):
+        return True
+    if raw in ("false", "0", "no"):
+        return False
+    logger.warning(
+        "Unrecognized DATAHUB_PROFILING_FORCE_TRANSACTIONAL value %r; ignoring. "
+        "Accepted values: true/1/yes, false/0/no.",
+        raw,
+    )
+    return None
+
+
 # ============================================================================
 # Integration-Specific Configuration
 # ============================================================================

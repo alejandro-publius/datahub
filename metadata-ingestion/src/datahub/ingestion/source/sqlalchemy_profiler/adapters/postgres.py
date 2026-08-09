@@ -178,3 +178,15 @@ class PostgresAdapter(PlatformAdapter):
                 f"Failed to get PostgreSQL row count estimate: {type(e).__name__}: {str(e)}"
             )
             return None
+
+    # =========================================================================
+    # Connection Isolation
+    # =========================================================================
+
+    def profiling_isolation_level(self) -> Optional[str]:
+        # AUTOCOMMIT keeps each profiling SELECT self-contained; without it the
+        # transaction spans the table's profile and holds Postgres
+        # idle-in-transaction (blocking VACUUM) until pool checkin. Safe here — no
+        # setup_profiling/cleanup override, so no temp resources. See
+        # metadata-ingestion/docs/dev_guides/sql_profiles.md.
+        return "AUTOCOMMIT"

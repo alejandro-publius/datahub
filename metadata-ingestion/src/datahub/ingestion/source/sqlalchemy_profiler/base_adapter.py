@@ -117,6 +117,25 @@ class PlatformAdapter(ABC):
         # Default implementation: no temp resources to clean up
         return
 
+    def profiling_isolation_level(self) -> Optional[str]:
+        """
+        Isolation level to apply to the profiling connection, or None to keep the default.
+
+        Opt-in is per-adapter by exact platform match in `get_adapter`
+        (`adapters/__init__.py`); the base default is None. Do NOT invert the base
+        default: `GenericAdapter` is the fallback for every unlisted platform, so
+        inverting would silently apply AUTOCOMMIT to engines that reject it.
+
+        See metadata-ingestion/docs/dev_guides/sql_profiles.md for the rationale and
+        the trade-off.
+
+        Returns:
+            A SQLAlchemy isolation level name (e.g. "AUTOCOMMIT"), or None. Kept as
+            Optional[str] (not Optional[Literal["AUTOCOMMIT"]]) so a future adapter can
+            return e.g. "READ COMMITTED" without a type change.
+        """
+        return None
+
     # =========================================================================
     # Identifier Quoting
     # =========================================================================

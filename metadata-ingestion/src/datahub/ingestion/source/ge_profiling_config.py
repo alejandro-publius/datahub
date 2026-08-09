@@ -4,7 +4,7 @@ import os
 from typing import Annotated, Any, Dict, List, Optional
 
 import pydantic
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic.fields import Field
 
 from datahub.configuration.common import AllowDenyPattern, ConfigModel, SupportedSources
@@ -19,6 +19,13 @@ _PROFILING_FLAGS_TO_REPORT = {
 }
 
 logger = logging.getLogger(__name__)
+
+# Sentinel for the `isolation_level` escape hatch: setting this value
+# (case-insensitive, normalized to upper-case by the validator) falls back to the
+# default transactional behavior — i.e. clears the adapter's AUTOCOMMIT default.
+# Shared so the validator (here) and the resolver (sqlalchemy_profiler) don't drift
+# on the literal string.
+TRANSACTIONAL = "TRANSACTIONAL"
 
 
 class ProfilingMethodConfig(ConfigModel):
@@ -181,6 +188,33 @@ class GEProfilingConfig(GEProfilingBaseConfig):
 
     # Hidden option - used for debugging purposes.
     catch_exceptions: bool = Field(default=True, description="")
+
+    # Opt-out for the AUTOCOMMIT profiling default: a raw SQLAlchemy isolation level
+    # string, so operators can turn AUTOCOMMIT off per-source. The fleet-wide kill
+    # switch is DATAHUB_PROFILING_FORCE_TRANSACTIONAL (see env_vars.py).
+    isolation_level: Annotated[
+        Optional[str], SupportedSources(["mysql", "postgres"])
+    ] = Field(
+        default=None,
+        description=(
+            "Isolation level for the profiling connection. MySQL and Postgres "
+            "default to AUTOCOMMIT so each profiling SELECT is self-contained; set "
+            "TRANSACTIONAL to restore the prior per-table transactional behavior, or "
+            "a SQLAlchemy isolation level name to force one. See "
+            "metadata-ingestion/docs/dev_guides/sql_profiles.md for the trade-off and "
+            "the fleet-wide kill switch."
+        ),
+    )
+
+    @field_validator("isolation_level", mode="before")
+    @classmethod
+    def _normalize_isolation_level(cls, value: Any) -> Any:
+        # Strip, upper-case, and map empty/whitespace to None so the TRANSACTIONAL
+        # sentinel resolves the same way regardless of case/whitespace.
+        if value is None or not isinstance(value, str):
+            return value
+        normalized = value.strip().upper()
+        return normalized or None
 
     partition_profiling_enabled: Annotated[
         bool, SupportedSources(["athena", "bigquery"])
