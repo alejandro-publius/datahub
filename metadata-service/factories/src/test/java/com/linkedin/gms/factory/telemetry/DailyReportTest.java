@@ -3,6 +3,7 @@ package com.linkedin.gms.factory.telemetry;
 import static org.mockito.Mockito.*;
 import static org.testng.Assert.*;
 
+import com.linkedin.datahub.graphql.analytics.service.AnalyticsService;
 import com.linkedin.gms.factory.config.ConfigurationProvider;
 import com.linkedin.metadata.entity.EntityService;
 import com.linkedin.metadata.utils.elasticsearch.IndexConvention;
@@ -10,6 +11,7 @@ import com.linkedin.metadata.utils.elasticsearch.SearchClientShim;
 import com.linkedin.metadata.version.GitVersion;
 import io.datahubproject.metadata.context.OperationContext;
 import io.datahubproject.metadata.context.SearchContext;
+import java.util.Map;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.RequestOptions;
@@ -386,5 +388,85 @@ public class DailyReportTest {
     assertEquals(anonymizeToBucketMethod.invoke(dailyReport, 100001), "100K-1M");
     assertEquals(anonymizeToBucketMethod.invoke(dailyReport, 1000000), "100K-1M");
     assertEquals(anonymizeToBucketMethod.invoke(dailyReport, 1000001), "1M+");
+  }
+
+  /**
+   * The whole point of batching: one aggregation covering every reported entity type, rather than
+   * one count query per type.
+   */
+  @Test
+  public void testCollectEntityCountsIssuesSingleSearch() throws Exception {
+    org.opensearch.search.aggregations.bucket.filter.Filters byEntity =
+        mock(org.opensearch.search.aggregations.bucket.filter.Filters.class);
+    // Nested mocks must be fully built before being handed to thenReturn().
+    org.opensearch.search.aggregations.bucket.filter.Filters.Bucket empty = entityBucket(0L);
+    org.opensearch.search.aggregations.bucket.filter.Filters.Bucket datasets = entityBucket(100L);
+    org.opensearch.search.aggregations.bucket.filter.Filters.Bucket tags = entityBucket(7L);
+    when(byEntity.getBucketByKey(anyString())).thenReturn(empty);
+    when(byEntity.getBucketByKey("DATASET")).thenReturn(datasets);
+    when(byEntity.getBucketByKey("TAG")).thenReturn(tags);
+    stubAggregationResponse(byEntity);
+
+    DailyReport dailyReport = createDailyReportForTesting();
+    Map<String, Integer> counts =
+        dailyReport.collectEntityCounts(
+            new AnalyticsService(mockElasticClient, mockIndexConvention));
+
+    org.mockito.ArgumentCaptor<SearchRequest> captor =
+        org.mockito.ArgumentCaptor.forClass(SearchRequest.class);
+    verify(mockElasticClient, times(1))
+        .search(any(OperationContext.class), captor.capture(), any(RequestOptions.class));
+    // One request spanning every reported entity type, not one request per type.
+    assertEquals(captor.getValue().indices().length, 19);
+
+    assertEquals(counts.get("DATASET"), Integer.valueOf(100));
+    assertEquals(counts.get("TAG"), Integer.valueOf(7));
+  }
+
+  /** Zero-count types are dropped so the telemetry payload stays concise. */
+  @Test
+  public void testCollectEntityCountsOmitsZeroCounts() throws Exception {
+    org.opensearch.search.aggregations.bucket.filter.Filters byEntity =
+        mock(org.opensearch.search.aggregations.bucket.filter.Filters.class);
+    org.opensearch.search.aggregations.bucket.filter.Filters.Bucket empty = entityBucket(0L);
+    org.opensearch.search.aggregations.bucket.filter.Filters.Bucket datasets = entityBucket(5L);
+    when(byEntity.getBucketByKey(anyString())).thenReturn(empty);
+    when(byEntity.getBucketByKey("DATASET")).thenReturn(datasets);
+    stubAggregationResponse(byEntity);
+
+    DailyReport dailyReport = createDailyReportForTesting();
+    Map<String, Integer> counts =
+        dailyReport.collectEntityCounts(
+            new AnalyticsService(mockElasticClient, mockIndexConvention));
+
+    assertEquals(counts.size(), 1, "only the non-zero type should be reported");
+    assertTrue(counts.containsKey("DATASET"));
+  }
+
+  private org.opensearch.search.aggregations.bucket.filter.Filters.Bucket entityBucket(
+      long docCount) {
+    org.opensearch.search.aggregations.bucket.filter.Filters.Bucket bucket =
+        mock(org.opensearch.search.aggregations.bucket.filter.Filters.Bucket.class);
+    when(bucket.getDocCount()).thenReturn(docCount);
+    return bucket;
+  }
+
+  /** Wraps the by_entity aggregation in the filtered wrapper AnalyticsService reads back. */
+  private void stubAggregationResponse(
+      org.opensearch.search.aggregations.bucket.filter.Filters byEntity) throws Exception {
+    org.opensearch.search.aggregations.Aggregations filteredAggs =
+        mock(org.opensearch.search.aggregations.Aggregations.class);
+    when(filteredAggs.get("by_entity")).thenReturn(byEntity);
+    org.opensearch.search.aggregations.bucket.filter.Filter filtered =
+        mock(org.opensearch.search.aggregations.bucket.filter.Filter.class);
+    when(filtered.getAggregations()).thenReturn(filteredAggs);
+    org.opensearch.search.aggregations.Aggregations topLevel =
+        mock(org.opensearch.search.aggregations.Aggregations.class);
+    when(topLevel.get("filtered")).thenReturn(filtered);
+    SearchResponse response = mock(SearchResponse.class);
+    when(response.getAggregations()).thenReturn(topLevel);
+    when(mockElasticClient.search(
+            any(OperationContext.class), any(SearchRequest.class), any(RequestOptions.class)))
+        .thenReturn(response);
   }
 }

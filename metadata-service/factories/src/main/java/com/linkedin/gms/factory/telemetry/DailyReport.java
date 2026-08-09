@@ -2,10 +2,12 @@ package com.linkedin.gms.factory.telemetry;
 
 import static com.linkedin.gms.factory.telemetry.TelemetryUtils.*;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.datahub.graphql.analytics.service.AnalyticsService;
+import com.linkedin.datahub.graphql.analytics.service.EntityStats;
 import com.linkedin.datahub.graphql.generated.DateRange;
 import com.linkedin.datahub.graphql.generated.EntityType;
 import com.linkedin.datahub.graphql.generated.NamedBar;
@@ -20,9 +22,11 @@ import io.datahubproject.metadata.context.OperationContext;
 import jakarta.annotation.Nonnull;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -45,6 +49,11 @@ public class DailyReport {
   private final GitVersion _gitVersion;
 
   private static final String MIXPANEL_TOKEN = "5ee83d940754d63cacbf7d34daa6f44a";
+
+  private static final String DAU = "dau";
+  private static final String WAU = "wau";
+  private static final String MAU = "mau";
+  private static final String BROWSER_ID = "browserId";
 
   /** SubType value used to identify service accounts in CorpUser entities. */
   private static final String SERVICE_ACCOUNT_SUB_TYPE = "SERVICE_ACCOUNT";
@@ -131,49 +140,38 @@ public class DailyReport {
     DateTime lastWeek = endDate.minusWeeks(1);
     DateTime lastMonth = endDate.minusMonths(1);
 
-    DateRange dayRange =
-        new DateRange(String.valueOf(yesterday.getMillis()), String.valueOf(endDate.getMillis()));
-    DateRange weekRange =
-        new DateRange(String.valueOf(lastWeek.getMillis()), String.valueOf(endDate.getMillis()));
-    DateRange monthRange =
-        new DateRange(String.valueOf(lastMonth.getMillis()), String.valueOf(endDate.getMillis()));
-
-    // TODO(opcontext-pr6): cannot use per-event opContext — scheduled telemetry job, no per-event
-    // context available
-    int dailyActiveUsers =
-        analyticsService.getHighlights(
-            systemOperationContext,
-            analyticsService.getUsageIndexName(),
-            Optional.of(dayRange),
-            ImmutableMap.of(),
-            ImmutableMap.of(),
-            Optional.of("browserId"));
-    // TODO(opcontext-pr6): cannot use per-event opContext — scheduled telemetry job, no per-event
-    // context available
-    int weeklyActiveUsers =
-        analyticsService.getHighlights(
-            systemOperationContext,
-            analyticsService.getUsageIndexName(),
-            Optional.of(weekRange),
-            ImmutableMap.of(),
-            ImmutableMap.of(),
-            Optional.of("browserId"));
-    // TODO(opcontext-pr6): cannot use per-event opContext — scheduled telemetry job, no per-event
-    // context available
-    int monthlyActiveUsers =
-        analyticsService.getHighlights(
-            systemOperationContext,
-            analyticsService.getUsageIndexName(),
-            Optional.of(monthRange),
-            ImmutableMap.of(),
-            ImmutableMap.of(),
-            Optional.of("browserId"));
+    Map<String, DateRange> activeUserRanges = new LinkedHashMap<>();
+    activeUserRanges.put(
+        DAU,
+        new DateRange(String.valueOf(yesterday.getMillis()), String.valueOf(endDate.getMillis())));
+    activeUserRanges.put(
+        WAU,
+        new DateRange(String.valueOf(lastWeek.getMillis()), String.valueOf(endDate.getMillis())));
+    activeUserRanges.put(
+        MAU,
+        new DateRange(String.valueOf(lastMonth.getMillis()), String.valueOf(endDate.getMillis())));
 
     // set user-level properties (all counts anonymized to nearest power of 2)
     JSONObject report = new JSONObject();
-    report.put("dau", anonymizeCount(dailyActiveUsers));
-    report.put("wau", anonymizeCount(weeklyActiveUsers));
-    report.put("mau", anonymizeCount(monthlyActiveUsers));
+
+    // TODO(opcontext-pr6): cannot use per-event opContext — scheduled telemetry job, no per-event
+    // context available
+    try {
+      Map<String, Integer> activeUsers =
+          analyticsService.getUniqueCountsByRange(
+              systemOperationContext,
+              analyticsService.getUsageIndexName(),
+              activeUserRanges,
+              BROWSER_ID);
+      activeUserRanges
+          .keySet()
+          .forEach(key -> report.put(key, anonymizeCount(activeUsers.get(key))));
+    } catch (Exception e) {
+      // Omit the keys rather than reporting zeros - an absent metric is honest, a fabricated
+      // zero is indistinguishable from a genuinely idle instance.
+      log.warn("Failed to collect active user counts: {}", e.getMessage());
+    }
+
     report.put("server_type", _configurationProvider.getDatahub().getServerType());
     report.put("server_version", _gitVersion.getVersion());
 
@@ -321,34 +319,34 @@ public class DailyReport {
    * @param analyticsService the analytics service for querying
    * @return map of entity type name to count
    */
-  private Map<String, Integer> collectEntityCounts(AnalyticsService analyticsService) {
-    Map<String, Integer> counts = new HashMap<>();
-
-    // Iterate only tracked entity types (not all)
+  @VisibleForTesting
+  Map<String, Integer> collectEntityCounts(AnalyticsService analyticsService) {
+    // A type whose index name cannot be resolved would fail the whole batch, where the previous
+    // per-type queries simply skipped it. Drop those up front to keep that resilience.
+    List<EntityType> resolvableTypes = new ArrayList<>();
     for (EntityType entityType : REPORTING_ENTITY_TYPES) {
       try {
-        String index = analyticsService.getEntityIndexName(entityType);
-        // TODO(opcontext-pr6): cannot use per-event opContext — scheduled telemetry job, no
-        // per-event context available
-        int count =
-            analyticsService.getHighlights(
-                systemOperationContext,
-                index,
-                Optional.empty(), // No date range
-                ImmutableMap.of(), // No filters
-                ImmutableMap.of("removed", ImmutableList.of("true")), // Exclude removed
-                Optional.empty()); // No unique field
-
-        // Only include entity types with non-zero counts to keep report concise
-        if (count > 0) {
-          counts.put(entityType.name(), count);
-        }
+        analyticsService.getEntityIndexName(entityType);
+        resolvableTypes.add(entityType);
       } catch (Exception e) {
-        log.debug("Failed to count entities for type {}: {}", entityType, e.getMessage());
-        // Don't add to counts if query failed - keeps report cleaner
+        log.debug("Skipping unresolvable entity type {}: {}", entityType, e.getMessage());
       }
     }
 
+    // TODO(opcontext-pr6): cannot use per-event opContext — scheduled telemetry job, no per-event
+    // context available
+    Map<EntityType, EntityStats> stats =
+        analyticsService.getEntityStats(
+            systemOperationContext, resolvableTypes, Collections.emptyList());
+
+    Map<String, Integer> counts = new HashMap<>();
+    stats.forEach(
+        (entityType, entityStats) -> {
+          // Only include entity types with non-zero counts to keep report concise
+          if (entityStats.getTotal() > 0) {
+            counts.put(entityType.name(), entityStats.getTotal());
+          }
+        });
     return counts;
   }
 
