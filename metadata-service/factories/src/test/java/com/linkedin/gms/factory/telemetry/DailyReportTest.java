@@ -11,7 +11,9 @@ import com.linkedin.metadata.utils.elasticsearch.SearchClientShim;
 import com.linkedin.metadata.version.GitVersion;
 import io.datahubproject.metadata.context.OperationContext;
 import io.datahubproject.metadata.context.SearchContext;
+import java.util.List;
 import java.util.Map;
+import org.json.JSONObject;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.RequestOptions;
@@ -27,6 +29,9 @@ import org.testng.annotations.Test;
  * is not tested as it requires external services (Mixpanel).
  */
 public class DailyReportTest {
+
+  /** Size of DailyReport.REPORTING_ENTITY_TYPES. */
+  private static final int REPORTED_ENTITY_TYPE_COUNT = 19;
 
   private OperationContext mockOperationContext;
   private SearchClientShim<?> mockElasticClient;
@@ -417,7 +422,7 @@ public class DailyReportTest {
     verify(mockElasticClient, times(1))
         .search(any(OperationContext.class), captor.capture(), any(RequestOptions.class));
     // One request spanning every reported entity type, not one request per type.
-    assertEquals(captor.getValue().indices().length, 19);
+    assertEquals(captor.getValue().indices().length, REPORTED_ENTITY_TYPE_COUNT);
 
     assertEquals(counts.get("DATASET"), Integer.valueOf(100));
     assertEquals(counts.get("TAG"), Integer.valueOf(7));
@@ -468,5 +473,134 @@ public class DailyReportTest {
     when(mockElasticClient.search(
             any(OperationContext.class), any(SearchRequest.class), any(RequestOptions.class)))
         .thenReturn(response);
+  }
+
+  /**
+   * Captures the telemetry payload through ping(), which is the only externally observable output
+   * of dailyReport(). Uses nothing but the public entry point, so it runs unchanged against the
+   * pre-batching implementation for a like-for-like payload comparison.
+   */
+  @Test
+  public void testDailyReportPayload() throws Exception {
+    stubEverything();
+
+    DailyReport spy = org.mockito.Mockito.spy(createDailyReportForTesting());
+    org.mockito.Mockito.doNothing().when(spy).ping(anyString(), any(JSONObject.class));
+
+    spy.dailyReport();
+
+    org.mockito.ArgumentCaptor<JSONObject> payload =
+        org.mockito.ArgumentCaptor.forClass(JSONObject.class);
+    verify(spy).ping(eq("service-daily"), payload.capture());
+
+    org.mockito.ArgumentCaptor<SearchRequest> requests =
+        org.mockito.ArgumentCaptor.forClass(SearchRequest.class);
+    verify(mockElasticClient, atLeast(0))
+        .search(any(OperationContext.class), requests.capture(), any(RequestOptions.class));
+
+    // Pre-batching this was 25 searches: 3 active-user windows plus one per reported entity type.
+    List<SearchRequest> issued = requests.getAllValues();
+    assertEquals(issued.size(), 5, "expected one search per concern, not one per entity type");
+
+    List<SearchRequest> multiIndex =
+        issued.stream()
+            .filter(r -> r.indices().length > 1)
+            .collect(java.util.stream.Collectors.toList());
+    assertEquals(multiIndex.size(), 1, "entity counts should collapse into a single search");
+    assertEquals(
+        multiIndex.get(0).indices().length,
+        REPORTED_ENTITY_TYPE_COUNT,
+        "the batch must span every reported entity type");
+
+    // The remaining four are the usage index, total users, service accounts and platform chart.
+    assertEquals(issued.size() - multiIndex.size(), 4);
+
+    // Payload must be unchanged by the batching - these values are what the per-query
+    // implementation produced from the same stubbed counts.
+    JSONObject report = payload.getValue();
+    assertEquals(report.get("dau"), 8);
+    assertEquals(report.get("wau"), 8);
+    assertEquals(report.get("mau"), 8);
+    assertEquals(report.get("total_assets"), "1K-10K");
+    assertEquals(report.get("total_user_count"), 32);
+    assertEquals(report.get("total_service_account_count"), 32);
+    assertEquals(report.get("server_type"), "test");
+
+    long entityCountKeys =
+        keysOf(report).stream().filter(k -> k.startsWith("entity_count_")).count();
+    assertEquals(
+        entityCountKeys,
+        (long) REPORTED_ENTITY_TYPE_COUNT,
+        "every reported entity type should carry a count");
+  }
+
+  private static java.util.List<String> keysOf(JSONObject o) {
+    java.util.List<String> keys = new java.util.ArrayList<>();
+    java.util.Iterator<String> it = o.keys();
+    while (it.hasNext()) {
+      keys.add(it.next());
+    }
+    return keys;
+  }
+
+  /** Response usable by both the batched and the per-query implementations. */
+  private void stubEverything() throws Exception {
+    org.opensearch.search.aggregations.metrics.Cardinality cardinality =
+        mock(org.opensearch.search.aggregations.metrics.Cardinality.class);
+    when(cardinality.getValue()).thenReturn(8L);
+
+    org.opensearch.search.aggregations.bucket.filter.Filters.Bucket rangeBucket =
+        mock(org.opensearch.search.aggregations.bucket.filter.Filters.Bucket.class);
+    org.opensearch.search.aggregations.Aggregations rangeAggs =
+        mock(org.opensearch.search.aggregations.Aggregations.class);
+    when(rangeAggs.get("unique")).thenReturn(cardinality);
+    when(rangeBucket.getAggregations()).thenReturn(rangeAggs);
+    org.opensearch.search.aggregations.bucket.filter.Filters byRange =
+        mock(org.opensearch.search.aggregations.bucket.filter.Filters.class);
+    when(byRange.getBucketByKey(anyString())).thenReturn(rangeBucket);
+
+    org.opensearch.search.aggregations.bucket.filter.Filters.Bucket entityBucket =
+        mock(org.opensearch.search.aggregations.bucket.filter.Filters.Bucket.class);
+    when(entityBucket.getDocCount()).thenReturn(100L);
+    org.opensearch.search.aggregations.bucket.filter.Filters byEntity =
+        mock(org.opensearch.search.aggregations.bucket.filter.Filters.class);
+    when(byEntity.getBucketByKey(anyString())).thenReturn(entityBucket);
+
+    // One filtered wrapper serving both shapes: the batched sub-aggregations, and the
+    // doc count / cardinality the per-query implementation reads straight off it.
+    org.opensearch.search.aggregations.Aggregations filteredAggs =
+        mock(org.opensearch.search.aggregations.Aggregations.class);
+    when(filteredAggs.get("by_range")).thenReturn(byRange);
+    when(filteredAggs.get("by_entity")).thenReturn(byEntity);
+    when(filteredAggs.get("unique")).thenReturn(cardinality);
+    org.opensearch.search.aggregations.bucket.filter.Filter filtered =
+        mock(org.opensearch.search.aggregations.bucket.filter.Filter.class);
+    when(filtered.getAggregations()).thenReturn(filteredAggs);
+    when(filtered.getDocCount()).thenReturn(100L);
+
+    org.opensearch.search.aggregations.Aggregations topLevel =
+        mock(org.opensearch.search.aggregations.Aggregations.class);
+    when(topLevel.get("filtered")).thenReturn(filtered);
+
+    org.apache.lucene.search.TotalHits totalHits =
+        new org.apache.lucene.search.TotalHits(
+            42, org.apache.lucene.search.TotalHits.Relation.EQUAL_TO);
+    org.opensearch.search.SearchHits hits = mock(org.opensearch.search.SearchHits.class);
+    when(hits.getTotalHits()).thenReturn(totalHits);
+
+    SearchResponse response = mock(SearchResponse.class);
+    when(response.getAggregations()).thenReturn(topLevel);
+    when(response.getHits()).thenReturn(hits);
+    when(mockElasticClient.search(
+            any(OperationContext.class), any(SearchRequest.class), any(RequestOptions.class)))
+        .thenReturn(response);
+
+    when(mockIndexConvention.getIndexName(anyString())).thenReturn("datahub_usage_event");
+
+    com.linkedin.metadata.config.DataHubConfiguration dh =
+        mock(com.linkedin.metadata.config.DataHubConfiguration.class);
+    when(dh.getServerType()).thenReturn("test");
+    when(mockConfigurationProvider.getDatahub()).thenReturn(dh);
+    when(mockGitVersion.getVersion()).thenReturn("1.0.0-test");
   }
 }
