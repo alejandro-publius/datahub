@@ -1602,48 +1602,32 @@ class SQLAlchemyProfiler:
                 with self.base_engine.connect() as conn:
                     isolation_level = adapter.profiling_isolation_level()
                     if isolation_level is not None:
-                        # Must be the first operation on this connection — the
-                        # isolation level cannot be changed once a transaction is in
-                        # progress. Do not insert queries above this block. Re-applied
-                        # on every checkout because SQLAlchemy reverts the level when a
-                        # connection returns to the pool. Rebind: under SQLAlchemy 1.x
-                        # legacy mode execution_options returns a shallow "branched" copy,
-                        # so the returned object is the one that must flow downstream
-                        # into adapter.setup_profiling(context, conn).
+                        # Must be the first operation on this connection — the isolation level
+                        # cannot be changed once a transaction is in progress. Re-applied on
+                        # every checkout because SQLAlchemy reverts it on pool return.
                         try:
                             conn = conn.execution_options(
                                 isolation_level=isolation_level
                             )
-                        except sa.exc.ArgumentError:
-                            # The dialect does not recognise the level this adapter
-                            # returned — an adapter bug, not an environment condition.
-                            # Re-raised so it is not mislabelled as an AUTOCOMMIT
-                            # rejection. Note that under the default
-                            # catch_exceptions=True this surfaces as a generic profiling
-                            # warning (ArgumentError is itself a SQLAlchemyError); it is
-                            # loud only with catch_exceptions=False.
-                            raise
                         except Exception as e:
-                            # A server or proxy refused the session setting.
-                            # Continue transactionally rather than losing every profile
-                            # in the run. The catch is deliberately broad: this path
-                            # (dialect.set_isolation_level) is not wrapped by SQLAlchemy's
-                            # _handle_dbapi_exception, so a driver-native rejection
-                            # surfaces as the raw driver error, not sa.exc.DBAPIError /
-                            # SQLAlchemyError. Narrowing to those would catch nothing,
-                            # and enumerating driver types would force hard imports of
-                            # optional drivers (pymysql / psycopg2) that get_adapter
-                            # exists to keep lazy.
+                            # Broad by necessity: execution_options calls
+                            # dialect.set_isolation_level directly, bypassing
+                            # SQLAlchemy's DBAPI exception wrapping, so a server refusal
+                            # arrives as a raw driver error, not a sa.exc.* type. Both
+                            # reachable failures — a dialect without this level in its
+                            # isolation lookup (ArgumentError) and a server or proxy
+                            # refusing it (raw driver error) — degrade the same way rather
+                            # than losing every profile in the run.
                             self.report.warning(
-                                title="Profiling: AUTOCOMMIT unavailable",
+                                title="Profiling: isolation level unavailable",
                                 message=(
-                                    "The database rejected the AUTOCOMMIT session "
-                                    "setting. Profiling will run one transaction per "
-                                    "table, which can block VACUUM (Postgres) or grow "
-                                    "the InnoDB undo log (MySQL) for the duration of "
-                                    "each table's profile."
+                                    f"The database or SQLAlchemy dialect did not accept "
+                                    f"the {isolation_level} session setting. Profiling will "
+                                    "run one transaction per table, which can block VACUUM "
+                                    "(Postgres) or grow the InnoDB undo log (MySQL) for the "
+                                    "duration of each table's profile."
                                 ),
-                                context=pretty_name,
+                                context=f"Asset: {pretty_name}",
                                 exc=e,
                             )
                     # Setup profiling using platform adapter
