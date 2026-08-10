@@ -1594,7 +1594,6 @@ class SQLAlchemyProfiler:
             row_count=row_count,
         )
 
-        # Get platform-specific adapter
         adapter = get_adapter(platform, self.config, self.report, self.base_engine)
 
         with PerfTimer() as timer:
@@ -1603,12 +1602,47 @@ class SQLAlchemyProfiler:
                 with self.base_engine.connect() as conn:
                     isolation_level = adapter.profiling_isolation_level()
                     if isolation_level is not None:
-                        # Rebind: under SQLAlchemy 1.x legacy mode this returns a shallow
-                        # "branched" copy, so the returned object is the one that must flow
-                        # downstream into adapter.setup_profiling(context, conn). Applying
-                        # it per checkout is required — SQLAlchemy reverts the isolation
-                        # level when a connection is returned to the pool.
-                        conn = conn.execution_options(isolation_level=isolation_level)
+                        # Must be the first operation on this connection — the
+                        # isolation level cannot be changed once a transaction is in
+                        # progress. Do not insert queries above this block. Re-applied
+                        # on every checkout because SQLAlchemy reverts the level when a
+                        # connection returns to the pool. Rebind: under SQLAlchemy 1.x
+                        # legacy mode execution_options returns a shallow "branched" copy,
+                        # so the returned object is the one that must flow downstream
+                        # into adapter.setup_profiling(context, conn).
+                        try:
+                            conn = conn.execution_options(
+                                isolation_level=isolation_level
+                            )
+                        except sa.exc.ArgumentError:
+                            # The dialect does not recognise the level this adapter
+                            # returned. That is an adapter bug, not an environment
+                            # condition — fail loudly rather than degrading a broken
+                            # adapter into a report entry.
+                            raise
+                        except Exception as e:
+                            # A server or proxy refused the session setting.
+                            # Continue transactionally rather than losing every profile
+                            # in the run. The catch is deliberately broad: this path
+                            # (dialect.set_isolation_level) is not wrapped by SQLAlchemy's
+                            # _handle_dbapi_exception, so a driver-native rejection
+                            # surfaces as the raw driver error, not sa.exc.DBAPIError /
+                            # SQLAlchemyError. Narrowing to those would catch nothing,
+                            # and enumerating driver types would force hard imports of
+                            # optional drivers (pymysql / psycopg2) that get_adapter
+                            # exists to keep lazy.
+                            self.report.failure(
+                                title="Profiling: AUTOCOMMIT unavailable",
+                                message=(
+                                    "The database rejected the AUTOCOMMIT session "
+                                    "setting. Profiling will run one transaction per "
+                                    "table, which can block VACUUM (Postgres) or grow "
+                                    "the InnoDB undo log (MySQL) for the duration of "
+                                    "each table's profile."
+                                ),
+                                context=pretty_name,
+                                exc=e,
+                            )
                     # Setup profiling using platform adapter
                     # This handles temp tables, sampling, and creates sql_table
                     try:

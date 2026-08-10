@@ -1,5 +1,6 @@
 """Unit tests for SQLAlchemyProfiler."""
 
+import sqlite3
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -803,6 +804,8 @@ class TestProfilingIsolationLevel:
             mock_adapter.setup_profiling.call_args[0][1]
             is mock_conn.execution_options.return_value
         )
+        # A successful apply is not a rejection — no failure entry.
+        profiler.report.failure.assert_not_called()
 
     def test_does_not_apply_options_when_level_none(self, profiler):
         # When the adapter's hook returns None, conn.execution_options is not called
@@ -833,54 +836,220 @@ class TestProfilingIsolationLevel:
         mock_conn.execution_options.assert_not_called()
         # The raw checked-out connection flows downstream unchanged.
         assert mock_adapter.setup_profiling.call_args[0][1] is mock_conn
+        # No level was applied, so no rejection — no failure entry.
+        profiler.report.failure.assert_not_called()
 
 
 class TestProfilingIsolationLevelRejection:
     """Documents what escapes ``conn.execution_options(isolation_level=...)`` when a
     server or proxy rejects the session setting.
 
-    A rejection inside ``dialect.set_isolation_level`` surfaces as the *raw* driver
-    error: SQLAlchemy does not wrap it in ``sa.exc.DBAPIError`` / ``SQLAlchemyError``
-    because ``execution_options`` does not go through statement execution (where
-    ``_handle_dbapi_exception`` lives). These assertions record the observed
-    behaviour against SQLAlchemy 1.4 so the phase-2 response — whichever of the
-    §3.2 options is chosen — can build on it. No behaviour change is asserted here.
+    The rejection is raised from ``dialect.set_isolation_level`` as a genuine
+    ``sqlite3.OperationalError`` — which IS ``dialect.dbapi.Error`` for the sqlite
+    dialect — so the test can distinguish "raw driver error not wrapped" from
+    "arbitrary exception not wrapped". SQLAlchemy's wrapping predicate is
+    ``isinstance(e, dialect.dbapi.Error)``; a wrapped path would turn this into
+    ``sa.exc.OperationalError``. It does not: ``execution_options`` calls
+    ``set_isolation_level`` directly and never reaches ``_handle_dbapi_exception``
+    (which lives in statement execution), so the raw driver error escapes. These
+    assertions record the observed behaviour against SQLAlchemy 1.4 so the
+    phase-2 response can build on it.
     """
 
     def test_rejection_escapes_as_raw_driver_error_not_sa_exc(self):
-        # Stands in for a driver-native error that is NOT in the sa.exc hierarchy
-        # (e.g. pymysql.err.OperationalError, psycopg2.ProgrammingError).
-        class _DriverRejection(Exception):
-            pass
-
         engine = create_engine("sqlite:///:memory:")
+        assert issubclass(sqlite3.OperationalError, engine.dialect.dbapi.Error)
+
         with engine.connect() as conn:
             with patch.object(
                 engine.dialect,
                 "set_isolation_level",
-                side_effect=_DriverRejection("proxy refuses AUTOCOMMIT"),
+                side_effect=sqlite3.OperationalError("proxy refuses AUTOCOMMIT"),
             ):
-                with pytest.raises(_DriverRejection) as exc_info:
+                with pytest.raises(sqlite3.OperationalError) as exc_info:
                     conn.execution_options(isolation_level="AUTOCOMMIT")
 
                 escaped = exc_info.value
+                # Raw driver error, not wrapped into the sa.exc hierarchy even
+                # though it IS a dialect.dbapi.Error.
                 assert not isinstance(escaped, sa.exc.SQLAlchemyError)
                 assert not isinstance(escaped, sa.exc.DBAPIError)
+                assert not isinstance(escaped, sa.exc.OperationalError)
 
     def test_connection_remains_usable_after_rejection(self):
-        class _DriverRejection(Exception):
-            pass
-
         engine = create_engine("sqlite:///:memory:")
         with engine.connect() as conn:
             with patch.object(
                 engine.dialect,
                 "set_isolation_level",
-                side_effect=_DriverRejection("nope"),
+                side_effect=sqlite3.OperationalError("nope"),
             ):
-                with pytest.raises(_DriverRejection):
+                with pytest.raises(sqlite3.OperationalError):
                     conn.execution_options(isolation_level="AUTOCOMMIT")
 
             # The rebind never ran, so `conn` is still the original object and
             # SQLAlchemy did not invalidate it. A fallback can keep using it.
             assert conn.exec_driver_sql("SELECT 1").scalar() == 1
+
+    def test_rejection_reports_failure_and_still_profiles(
+        self, profiler, sqlite_engine, test_table
+    ):
+        # Both halves: a rejected execution_options produces exactly one
+        # report failure titled "Profiling: AUTOCOMMIT unavailable" AND the
+        # table still produces a profile. The second assertion is the one that
+        # matters — without it this test passes even when the fallback leaves
+        # an unusable connection, which is the failure this design exists to
+        # avoid.
+        profiler.config.catch_exceptions = True
+        request = ProfilerRequest(
+            pretty_name="test.my_table",
+            batch_kwargs={"table": "test_table", "schema": None},
+        )
+        metadata = sa.MetaData()
+        sql_table = sa.Table("test_table", metadata, sa.Column("id", sa.Integer))
+
+        def mock_profile_row_count(*args, **kwargs):
+            profile = args[3] if len(args) > 3 else kwargs.get("profile")
+            if profile:
+                profile.rowCount = 0
+            return 0
+
+        with (
+            sqlite_engine.connect() as conn,
+            patch.object(profiler, "base_engine") as mock_engine,
+            patch.object(
+                profiler, "_profile_row_count", side_effect=mock_profile_row_count
+            ),
+            patch(
+                "datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler.get_adapter"
+            ) as mock_get_adapter,
+            patch.object(
+                sqlite_engine.dialect,
+                "set_isolation_level",
+                side_effect=sqlite3.OperationalError("proxy refuses AUTOCOMMIT"),
+            ),
+        ):
+            mock_engine.connect.return_value.__enter__.return_value = conn
+            mock_adapter = MagicMock()
+            mock_context = MagicMock()
+            mock_context.sql_table = sql_table
+            mock_adapter.setup_profiling.return_value = mock_context
+            mock_adapter.profiling_isolation_level.return_value = "AUTOCOMMIT"
+            mock_get_adapter.return_value = mock_adapter
+
+            result_request, result_profile = profiler._generate_profile_from_request(
+                None, request
+            )
+
+        assert result_request == request
+        # Half 2: the table still produces a profile despite the rejection.
+        assert result_profile is not None
+        # Half 1: exactly one failure, titled and attributed correctly.
+        assert profiler.report.failure.call_count == 1
+        failure_call = profiler.report.failure.call_args
+        assert failure_call.kwargs["title"] == "Profiling: AUTOCOMMIT unavailable"
+        assert failure_call.kwargs["context"] == "test.my_table"
+        assert isinstance(failure_call.kwargs["exc"], sqlite3.OperationalError)
+
+    def test_rejection_dedups_across_tables(self, sqlite_engine, profiler_config):
+        # Pins the byte-identical-message constraint: profiling two tables
+        # under the same rejection produces one failure entry with two
+        # contexts, not two entries. A later edit that interpolates the
+        # table name into `message` would fail here.
+        real_report = SQLSourceReport()
+        profiler = SQLAlchemyProfiler(
+            conn=sqlite_engine,
+            report=real_report,
+            config=profiler_config,
+            platform="sqlite",
+            env="TEST",
+        )
+        profiler.config.catch_exceptions = True
+        metadata = sa.MetaData()
+        sql_table = sa.Table("test_table", metadata, sa.Column("id", sa.Integer))
+
+        def mock_profile_row_count(*args, **kwargs):
+            profile = args[3] if len(args) > 3 else kwargs.get("profile")
+            if profile:
+                profile.rowCount = 0
+            return 0
+
+        requests = [
+            ProfilerRequest(
+                pretty_name="db.t1",
+                batch_kwargs={"table": "t1", "schema": None},
+            ),
+            ProfilerRequest(
+                pretty_name="db.t2",
+                batch_kwargs={"table": "t2", "schema": None},
+            ),
+        ]
+
+        with (
+            sqlite_engine.connect() as conn,
+            patch.object(profiler, "base_engine") as mock_engine,
+            patch.object(
+                profiler, "_profile_row_count", side_effect=mock_profile_row_count
+            ),
+            patch(
+                "datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler.get_adapter"
+            ) as mock_get_adapter,
+            patch.object(
+                sqlite_engine.dialect,
+                "set_isolation_level",
+                side_effect=sqlite3.OperationalError("nope"),
+            ),
+        ):
+            mock_engine.connect.return_value.__enter__.return_value = conn
+            mock_adapter = MagicMock()
+            mock_context = MagicMock()
+            mock_context.sql_table = sql_table
+            mock_adapter.setup_profiling.return_value = mock_context
+            mock_adapter.profiling_isolation_level.return_value = "AUTOCOMMIT"
+            mock_get_adapter.return_value = mock_adapter
+
+            for req in requests:
+                profiler._generate_profile_from_request(None, req)
+
+        # One deduped entry, not two.
+        assert len(real_report.failures) == 1
+        failure = real_report.failures[0]
+        assert failure.title == "Profiling: AUTOCOMMIT unavailable"
+        # Both table contexts are attached to the single entry. The context
+        # string carries the exception type/message suffix (see report_log),
+        # so match on the table-name prefix rather than exact equality.
+        contexts = list(failure.context)
+        assert len(contexts) == 2
+        assert any(c.startswith("db.t1") for c in contexts)
+        assert any(c.startswith("db.t2") for c in contexts)
+
+    def test_argument_error_is_not_swallowed(self, profiler, sqlite_engine):
+        # An adapter returning a level the dialect does not recognise is a
+        # bug, not an environment condition: ArgumentError re-raises out of
+        # the inner block and is not reported as an AUTOCOMMIT-unavailable
+        # failure. With catch_exceptions=False it propagates out of
+        # _generate_single_profile (the outer SQLAlchemyError handler
+        # re-raises when catch_exceptions is False).
+        profiler.config.catch_exceptions = False
+        request = ProfilerRequest(
+            pretty_name="test.my_table",
+            batch_kwargs={"table": "test_table", "schema": None},
+        )
+
+        with (
+            sqlite_engine.connect() as conn,
+            patch.object(profiler, "base_engine") as mock_engine,
+            patch(
+                "datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler.get_adapter"
+            ) as mock_get_adapter,
+        ):
+            mock_engine.connect.return_value.__enter__.return_value = conn
+            mock_adapter = MagicMock()
+            mock_adapter.profiling_isolation_level.return_value = "BOGUS_LEVEL"
+            mock_get_adapter.return_value = mock_adapter
+
+            with pytest.raises(sa.exc.ArgumentError):
+                profiler._generate_profile_from_request(None, request)
+
+        # Not degraded into an AUTOCOMMIT-unavailable failure entry.
+        profiler.report.failure.assert_not_called()
