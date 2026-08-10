@@ -41,7 +41,32 @@
                     "rawSchema": ""
                 }
             },
-            "fields": []
+            "fields": [
+                {
+                    "fieldPath": "name",
+                    "nullable": false,
+                    "type": {
+                        "type": {
+                            "com.linkedin.schema.StringType": {}
+                        }
+                    },
+                    "nativeDataType": "String",
+                    "recursive": false,
+                    "isPartOfKey": false
+                },
+                {
+                    "fieldPath": "region",
+                    "nullable": false,
+                    "type": {
+                        "type": {
+                            "com.linkedin.schema.StringType": {}
+                        }
+                    },
+                    "nativeDataType": "String",
+                    "recursive": false,
+                    "isPartOfKey": false
+                }
+            ]
         }
     },
     "systemMetadata": {
@@ -138,6 +163,30 @@
                     "dataset": "urn:li:dataset:(urn:li:dataPlatform:mssql,datarepository.dbo.new_names,PROD)",
                     "type": "TRANSFORMED"
                 }
+            ],
+            "fineGrainedLineages": [
+                {
+                    "upstreamType": "FIELD_SET",
+                    "upstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:mssql,datarepository.dbo.new_names,PROD),name)"
+                    ],
+                    "downstreamType": "FIELD",
+                    "downstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),name)"
+                    ],
+                    "confidenceScore": 1.0
+                },
+                {
+                    "upstreamType": "FIELD_SET",
+                    "upstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:mssql,datarepository.dbo.new_names,PROD),region)"
+                    ],
+                    "downstreamType": "FIELD",
+                    "downstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),region)"
+                    ],
+                    "confidenceScore": 1.0
+                }
             ]
         }
     },
@@ -213,7 +262,32 @@
                     "rawSchema": ""
                 }
             },
-            "fields": []
+            "fields": [
+                {
+                    "fieldPath": "name",
+                    "nullable": false,
+                    "type": {
+                        "type": {
+                            "com.linkedin.schema.StringType": {}
+                        }
+                    },
+                    "nativeDataType": "String",
+                    "recursive": false,
+                    "isPartOfKey": false
+                },
+                {
+                    "fieldPath": "region",
+                    "nullable": false,
+                    "type": {
+                        "type": {
+                            "com.linkedin.schema.StringType": {}
+                        }
+                    },
+                    "nativeDataType": "String",
+                    "recursive": false,
+                    "isPartOfKey": false
+                }
+            ]
         }
     },
     "systemMetadata": {
@@ -310,6 +384,30 @@
                     "dataset": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV)",
                     "type": "TRANSFORMED"
                 }
+            ],
+            "fineGrainedLineages": [
+                {
+                    "upstreamType": "FIELD_SET",
+                    "upstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),name)"
+                    ],
+                    "downstreamType": "FIELD",
+                    "downstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV),name)"
+                    ],
+                    "confidenceScore": 1.0
+                },
+                {
+                    "upstreamType": "FIELD_SET",
+                    "upstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),region)"
+                    ],
+                    "downstreamType": "FIELD",
+                    "downstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV),region)"
+                    ],
+                    "confidenceScore": 1.0
+                }
             ]
         }
     },
@@ -385,7 +483,32 @@
                     "rawSchema": ""
                 }
             },
-            "fields": []
+            "fields": [
+                {
+                    "fieldPath": "name",
+                    "nullable": false,
+                    "type": {
+                        "type": {
+                            "com.linkedin.schema.StringType": {}
+                        }
+                    },
+                    "nativeDataType": "String",
+                    "recursive": false,
+                    "isPartOfKey": false
+                },
+                {
+                    "fieldPath": "region",
+                    "nullable": false,
+                    "type": {
+                        "type": {
+                            "com.linkedin.schema.StringType": {}
+                        }
+                    },
+                    "nativeDataType": "String",
+                    "recursive": false,
+                    "isPartOfKey": false
+                }
+            ]
         }
     },
     "systemMetadata": {
@@ -490,6 +613,52 @@
                     "dataset": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV)",
                     "type": "TRANSFORMED"
                 }
+            ],
+            "fineGrainedLineages": [
+                {
+                    "upstreamType": "FIELD_SET",
+                    "upstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),name)"
+                    ],
+                    "downstreamType": "FIELD",
+                    "downstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV),name)"
+                    ],
+                    "confidenceScore": 1.0
+                },
+                {
+                    "upstreamType": "FIELD_SET",
+                    "upstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),region)"
+                    ],
+                    "downstreamType": "FIELD",
+                    "downstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV),region)"
+                    ],
+                    "confidenceScore": 1.0
+                },
+                {
+                    "upstreamType": "FIELD_SET",
+                    "upstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV),name)"
+                    ],
+                    "downstreamType": "FIELD",
+                    "downstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV),name)"
+                    ],
+                    "confidenceScore": 1.0
+                },
+                {
+                    "upstreamType": "FIELD_SET",
+                    "upstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV),region)"
+                    ],
+                    "downstreamType": "FIELD",
+                    "downstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV),region)"
+                    ],
+                    "confidenceScore": 1.0
+                }
             ]
         }
     },
@@ -565,7 +734,32 @@
                     "rawSchema": ""
                 }
             },
-            "fields": []
+            "fields": [
+                {
+                    "fieldPath": "name",
+                    "nullable": false,
+                    "type": {
+                        "type": {
+                            "com.linkedin.schema.StringType": {}
+                        }
+                    },
+                    "nativeDataType": "String",
+                    "recursive": false,
+                    "isPartOfKey": false
+                },
+                {
+                    "fieldPath": "region",
+                    "nullable": false,
+                    "type": {
+                        "type": {
+                            "com.linkedin.schema.StringType": {}
+                        }
+                    },
+                    "nativeDataType": "String",
+                    "recursive": false,
+                    "isPartOfKey": false
+                }
+            ]
         }
     },
     "systemMetadata": {
@@ -661,6 +855,30 @@
                     },
                     "dataset": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV)",
                     "type": "TRANSFORMED"
+                }
+            ],
+            "fineGrainedLineages": [
+                {
+                    "upstreamType": "FIELD_SET",
+                    "upstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),name)"
+                    ],
+                    "downstreamType": "FIELD",
+                    "downstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.names_summary,DEV),name)"
+                    ],
+                    "confidenceScore": 1.0
+                },
+                {
+                    "upstreamType": "FIELD_SET",
+                    "upstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),region)"
+                    ],
+                    "downstreamType": "FIELD",
+                    "downstreams": [
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.names_summary,DEV),region)"
+                    ],
+                    "confidenceScore": 1.0
                 }
             ]
         }

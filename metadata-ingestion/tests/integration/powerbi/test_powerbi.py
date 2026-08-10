@@ -1874,6 +1874,11 @@ def test_powerbi_table_to_table_lineage(
                 "config": {
                     **default_source_config(),
                     "extract_lineage": True,
+                    # Column-level lineage requires this whole flag set.
+                    "extract_column_level_lineage": True,
+                    "native_query_parsing": True,
+                    "enable_advance_lineage_sql_construct": True,
+                    "extract_dataset_schema": True,
                     "extract_table_to_table_lineage": True,
                     "extract_independent_datasets": True,
                     # Include MSSQL so the golden also covers a table carrying

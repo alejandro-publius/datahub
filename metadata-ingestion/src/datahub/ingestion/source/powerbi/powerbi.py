@@ -411,6 +411,11 @@ class Mapper:
                 upstream.append(
                     UpstreamClass(sibling_urn, DatasetLineageTypeClass.TRANSFORMED)
                 )
+            cll_lineage.extend(
+                self._sibling_column_lineage(
+                    lineage.powerbi_table_upstreams, table, ds_urn
+                )
+            )
 
         if len(upstream) > 0:
             upstream_lineage_class: UpstreamLineageClass = UpstreamLineageClass(
@@ -427,6 +432,64 @@ class Mapper:
             mcps.append(mcp)
 
         return mcps
+
+    def _sibling_dataset_urn(self, sibling: powerbi_data_classes.Table) -> str:
+        """URN for a sibling table, shared so the edge and its column lineage agree."""
+        return self.assets_urn_to_lowercase(
+            builder.make_dataset_urn_with_platform_instance(
+                platform=self.__config.platform_name,
+                name=sibling.full_name,
+                platform_instance=self.__config.platform_instance,
+                env=self.__config.env,
+            )
+        )
+
+    def _sibling_column_lineage(
+        self,
+        table_references: List[str],
+        current_table: powerbi_data_classes.Table,
+        dataset_urn: str,
+    ) -> List[FineGrainedLineage]:
+        """1:1 column lineage for a table that is a reference to sibling tables.
+
+        Such a table passes its columns through unchanged, so columns map by name.
+        Only columns present on both sides are linked, so a reference that renames
+        or drops columns simply yields fewer edges rather than wrong ones.
+        """
+        if not (
+            self.__config.extract_lineage and self.__config.extract_column_level_lineage
+        ):
+            return []
+
+        downstream_by_name = {
+            column.name.casefold(): column.name
+            for column in (current_table.columns or [])
+        }
+        if not downstream_by_name:
+            return []
+
+        fine_grained: List[FineGrainedLineage] = []
+        for sibling in powerbi_data_classes.matching_sibling_tables(
+            current_table, table_references
+        ):
+            sibling_urn = self._sibling_dataset_urn(sibling)
+            for column in sibling.columns or []:
+                downstream_name = downstream_by_name.get(column.name.casefold())
+                if downstream_name is None:
+                    continue
+                fine_grained.append(
+                    FineGrainedLineage(
+                        downstreamType=FineGrainedLineageDownstreamType.FIELD,
+                        downstreams=[
+                            builder.make_schema_field_urn(dataset_urn, downstream_name)
+                        ],
+                        upstreamType=FineGrainedLineageUpstreamType.FIELD_SET,
+                        upstreams=[
+                            builder.make_schema_field_urn(sibling_urn, column.name)
+                        ],
+                    )
+                )
+        return fine_grained
 
     def _table_reference_upstreams(
         self,
@@ -481,16 +544,7 @@ class Mapper:
             self.__reporter.m_query_table_to_table_lineage_samples.append(
                 f"{current_table.full_name} -> {sibling.full_name}"
             )
-            upstream_urns.append(
-                self.assets_urn_to_lowercase(
-                    builder.make_dataset_urn_with_platform_instance(
-                        platform=self.__config.platform_name,
-                        name=sibling.full_name,
-                        platform_instance=self.__config.platform_instance,
-                        env=self.__config.env,
-                    )
-                )
-            )
+            upstream_urns.append(self._sibling_dataset_urn(sibling))
         return upstream_urns
 
     def create_datahub_owner_urn(self, user: str) -> str:

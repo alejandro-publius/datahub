@@ -21,6 +21,18 @@
                     {
                       "expression": "let\n    Source = Sql.Database(\"localhost\", \"datarepository\"),\n    dbo_new_names = Source{[Schema=\"dbo\",Item=\"new_names\"]}[Data]\nin\n    dbo_new_names"
                     }
+                  ],
+                  "columns": [
+                    {
+                      "name": "name",
+                      "dataType": "String",
+                      "isHidden": false
+                    },
+                    {
+                      "name": "region",
+                      "dataType": "String",
+                      "isHidden": false
+                    }
                   ]
                 },
                 {
@@ -28,6 +40,18 @@
                   "source": [
                     {
                       "expression": "let\n    Source = #\"fact_new_names\"\nin\n    Source"
+                    }
+                  ],
+                  "columns": [
+                    {
+                      "name": "name",
+                      "dataType": "String",
+                      "isHidden": false
+                    },
+                    {
+                      "name": "region",
+                      "dataType": "String",
+                      "isHidden": false
                     }
                   ]
                 },
@@ -37,6 +61,18 @@
                     {
                       "expression": "let\n    Source = Table.Combine({#\"fact_new_names\", #\"new_names_ref\"})\nin\n    Source"
                     }
+                  ],
+                  "columns": [
+                    {
+                      "name": "name",
+                      "dataType": "String",
+                      "isHidden": false
+                    },
+                    {
+                      "name": "region",
+                      "dataType": "String",
+                      "isHidden": false
+                    }
                   ]
                 },
                 {
@@ -44,6 +80,18 @@
                   "source": [
                     {
                       "expression": "summarize('fact_new_names', 'fact_new_names'[name])"
+                    }
+                  ],
+                  "columns": [
+                    {
+                      "name": "name",
+                      "dataType": "String",
+                      "isHidden": false
+                    },
+                    {
+                      "name": "region",
+                      "dataType": "String",
+                      "isHidden": false
                     }
                   ]
                 }

@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import List
+from typing import List, Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -25,11 +25,13 @@ from datahub.ingestion.source.powerbi.m_query.resolver import (
 )
 from datahub.ingestion.source.powerbi.powerbi import Mapper
 from datahub.ingestion.source.powerbi.rest_api_wrapper.data_classes import (
+    Column,
     PowerBIDataset,
     Table,
 )
 from datahub.metadata.schema_classes import (
     DatasetLineageTypeClass,
+    StringTypeClass,
     UpstreamLineageClass,
 )
 
@@ -836,3 +838,53 @@ def test_disabled_dax_is_counted_as_disabled() -> None:
     )
 
     assert reporter.m_query_table_to_table_disabled == 1
+
+
+def test_sibling_reference_emits_one_to_one_column_lineage() -> None:
+    # A table that is just a reference to a sibling passes its columns straight
+    # through, so the edge should carry 1:1 column lineage — that is what the
+    # table-level edge alone does not give you in the UI.
+    config = _config()
+    cols = [
+        Column(
+            name="OpportunityType",
+            dataType="String",
+            isHidden=False,
+            datahubDataType=StringTypeClass(),
+        ),
+        Column(
+            name="CombinedOppFlagID",
+            dataType="String",
+            isHidden=False,
+            datahubDataType=StringTypeClass(),
+        ),
+    ]
+    child = Table(
+        name="New Names",
+        full_name="d1.New Names",
+        expression='let S = #"factNewNames" in S',
+        columns=cols,
+    )
+    sibling = Table(name="factNewNames", full_name="d1.factNewNames", columns=cols)
+    _dataset_with_tables([child, sibling])
+
+    ds_urn = "urn:li:dataset:(urn:li:dataPlatform:powerbi,d1.New Names,PROD)"
+    mcps = _mapper(config).extract_lineage(child, ds_urn, MagicMock())
+
+    aspect = next(
+        mcp.aspect for mcp in mcps if isinstance(mcp.aspect, UpstreamLineageClass)
+    )
+    assert aspect.fineGrainedLineages, "sibling edge carries no column lineage"
+
+    def field(urns: Optional[List[str]]) -> str:
+        assert urns
+        return urns[0].split(",")[-1].rstrip(")")
+
+    pairs = {
+        (field(fg.downstreams), field(fg.upstreams))
+        for fg in aspect.fineGrainedLineages
+    }
+    assert pairs == {
+        ("OpportunityType", "OpportunityType"),
+        ("CombinedOppFlagID", "CombinedOppFlagID"),
+    }
