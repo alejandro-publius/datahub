@@ -4,17 +4,12 @@ import os
 from typing import Annotated, Any, Dict, List, Optional
 
 import pydantic
-from pydantic import field_validator, model_validator
+from pydantic import model_validator
 from pydantic.fields import Field
 
 from datahub.configuration.common import AllowDenyPattern, ConfigModel, SupportedSources
 from datahub.configuration.validate_field_removal import pydantic_removed_field
 from datahub.ingestion.source_config.operation_config import OperationConfig
-
-# Sentinel for ProfilingConfig.profiling_isolation_level. The only non-None value the
-# field accepts; means "turn AUTOCOMMIT off and keep the prior per-table transactional
-# behavior". Long-term interface is `profiling_consistency: none | snapshot`.
-PROFILING_ISOLATION_LEVEL_TRANSACTIONAL = "TRANSACTIONAL"
 
 _PROFILING_FLAGS_TO_REPORT = {
     "turn_off_expensive_profiling_metrics",
@@ -186,45 +181,6 @@ class GEProfilingConfig(GEProfilingBaseConfig):
 
     # Hidden option - used for debugging purposes.
     catch_exceptions: bool = Field(default=True, description="")
-
-    # Long-term interface is `profiling_consistency: none | snapshot`; for now this is a
-    # single on/off knob. None keeps the adapter default (AUTOCOMMIT for MySQL/Postgres);
-    # TRANSACTIONAL turns AUTOCOMMIT off and restores the prior per-table transactional
-    # behavior. Any other value is rejected at config-parse time — a free-form isolation
-    # level name would let a user force AUTOCOMMIT onto the five adapters that override
-    # setup_profiling (Athena/BigQuery/Trino/Snowflake/ClickHouse) and that base_adapter
-    # deliberately excludes, or force SERIALIZABLE, which makes the original problem worse.
-    profiling_isolation_level: Optional[str] = Field(
-        default=None,
-        description=(
-            "Turn AUTOCOMMIT off for MySQL/Postgres profiling. Set to TRANSACTIONAL to "
-            "restore the prior per-table transactional behavior (one transaction held "
-            "open across every profiling query for a table). MySQL and Postgres "
-            "otherwise profile under AUTOCOMMIT so each statement is self-contained. "
-            "Only TRANSACTIONAL (case-insensitive) or None is accepted; any other value "
-            "is rejected at config-parse time."
-        ),
-    )
-
-    @field_validator("profiling_isolation_level", mode="before")
-    @classmethod
-    def _normalize_profiling_isolation_level(cls, v: Any) -> Any:
-        if v is None:
-            return None
-        if not isinstance(v, str):
-            raise ValueError(
-                "profiling_isolation_level must be a string; "
-                f"received {type(v).__name__}"
-            )
-        normalized = v.strip().upper()
-        if normalized != PROFILING_ISOLATION_LEVEL_TRANSACTIONAL:
-            raise ValueError(
-                "profiling_isolation_level only accepts "
-                f"{PROFILING_ISOLATION_LEVEL_TRANSACTIONAL!r} (case-insensitive) or "
-                f"None; got {v!r}. Use TRANSACTIONAL to turn AUTOCOMMIT off for "
-                "MySQL/Postgres profiling."
-            )
-        return PROFILING_ISOLATION_LEVEL_TRANSACTIONAL
 
     partition_profiling_enabled: Annotated[
         bool, SupportedSources(["athena", "bigquery"])

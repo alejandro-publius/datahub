@@ -133,26 +133,14 @@ class PlatformAdapter(ABC):
         deterministic).
 
         Opt-in is per-adapter and the base default is None. Only adapters that create no
-        session-scoped temp resources — they override neither `setup_profiling` nor
-        `cleanup` — should override this. `GenericAdapter` is the fallback for every
-        unlisted platform (mariadb, tidb, doris, starrocks, hive, oracle, vertica, db2,
-        presto, druid, ...), so inverting the base default would silently apply AUTOCOMMIT
-        to engines that may reject it.
-
-        Adapter accounting (11 total):
-        - Override `setup_profiling` AND `cleanup` (create session-scoped temp resources
-          requiring teardown): Athena, BigQuery, Trino, Snowflake. AUTOCOMMIT is probably
-          safe for them (resources are session- not transaction-scoped) but is not taken in
-          this PR — no reason to risk it unreviewed.
-        - Overrides `setup_profiling` only: ClickHouse. Needs its own review (no `cleanup`
-          override, so its setup resources are not explicitly torn down).
-        - Override neither `setup_profiling` nor `cleanup` and are as safe as MySQL/Postgres
-          by the criterion above, but are DEFERRED (not opted in here) pending individual
-          review: Redshift (subclasses PlatformAdapter directly; long transactions blocking
-          VACUUM is a real Redshift problem), MSSQL, Databricks, Generic (the fallback for
-          all unlisted platforms).
-        - Opted in here: MySQL, Postgres (neither overrides `setup_profiling` nor `cleanup`,
-          so they create no temp resources).
+        session-scoped temp resources — they override neither `setup_profiling` nor `cleanup`
+        — should override this. MySQL and Postgres qualify. Adapters that do create temp
+        resources are left at the default; autocommit is probably safe for them, since those
+        resources are session- rather than transaction-scoped, but that has not been reviewed.
+        The criterion holds for the base path: `PlatformAdapter.setup_profiling` only reflects
+        columns via `autoload_with` against the engine (a read-only information-schema query
+        on a separate pool checkout, not the profiling connection) and the base `cleanup` is a
+        no-op, so an adapter that overrides neither creates no session-scoped temp resources.
 
         SQLAlchemy reverts the isolation level when a connection is returned to the pool, so
         the caller must re-apply this on each checked-out connection rather than once per
@@ -164,9 +152,9 @@ class PlatformAdapter(ABC):
         written table — e.g. `uniqueCount` > `rowCount` (uniqueCount is emitted raw, not
         clamped), or a histogram bucketed on a stale `min`/`max` containing out-of-range
         values. The clamps that exist (`null_count = max(0, row_count - non_null_count)`,
-        `nullProportion`/`uniqueProportion` via `min(1, ...)`) prevent nonsensical ratios,
-        not inconsistent counts. Analytical profiling tolerates minor inconsistency, and
-        this is safer than the long-transaction alternative.
+        `nullProportion`/`uniqueProportion` via `min(1, ...)`) prevent nonsensical ratios, not
+        inconsistent counts. This is explicitly accepted and is safer than the long-transaction
+        alternative.
 
         Returns:
             A SQLAlchemy isolation level name (e.g. "AUTOCOMMIT"), or None. Kept as
