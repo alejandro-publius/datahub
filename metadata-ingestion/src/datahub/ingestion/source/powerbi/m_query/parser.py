@@ -57,12 +57,37 @@ _M_ONLY_SYNTAX = re.compile(
 _M_IF_EXPRESSION = re.compile(r"^\s*if\b[\s\S]*?\bthen\b", re.IGNORECASE)
 # Comments must not decide the language: a DAX expression whose comment mentions
 # `let` would otherwise be reported as a failed M-Query and lose its lineage.
-_COMMENT = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
+
+
+def _strip_comments(text: str) -> str:
+    """Blank out `//` and `/* */` comments in a single pass.
+
+    Deliberately not a regex: any regex for block comments rescans from every
+    `/*`, so an expression carrying many unclosed starts costs quadratic time —
+    a denial-of-service risk on expressions we do not control.
+    """
+    if "/" not in text:
+        return text
+    out: List[str] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        if text.startswith("//", index):
+            newline = text.find("\n", index)
+            index = length if newline == -1 else newline
+        elif text.startswith("/*", index):
+            close = text.find("*/", index + 2)
+            index = length if close == -1 else close + 2
+            out.append(" ")
+        else:
+            out.append(text[index])
+            index += 1
+    return "".join(out)
 
 
 def _looks_like_m_query(expression: str) -> bool:
     """Whether *expression* is M-Query (as opposed to a DAX table expression)."""
-    code = _COMMENT.sub(" ", expression)
+    code = _strip_comments(expression)
     return bool(
         _M_LET_KEYWORD.search(code)
         or _M_NAMESPACED_CALL.search(code)

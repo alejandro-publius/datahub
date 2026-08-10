@@ -8,7 +8,6 @@ from typing import Dict, FrozenSet, List, NamedTuple, Optional, Set, Tuple
 
 from datahub.ingestion.source.powerbi.m_query.ast_utils import (
     NodeIdMap,
-    get_invoke_callee_name,
     get_record_field_values,
     resolve_identifier,
 )
@@ -95,13 +94,10 @@ def resolve_to_table_references(
             _Scope(scope_id=root_let_id, let_node=root_let),
         )
     else:
-        # No let scope. A call to an M library function (always namespaced, e.g.
-        # Table.Combine) may still take sibling tables as arguments, so walk it —
-        # wrapping an expression in a `let` must not change the answer. A call to
-        # anything else is an unknown or unsupported source (e.g.
-        # `LOAD_DATA(Source)`) whose arguments are parameters, not tables.
-        if _calls_unknown_function(node_map):
-            return []
+        # No let scope. Whether a call's arguments may be sibling tables is
+        # decided per callee while walking (see _walk_invoke), not by scanning the
+        # whole expression — an unknown call in one argument must not suppress
+        # references in the others.
         # The root is the one node with no parent. Falling back to the lowest id
         # is only an approximation — for `TblA & TblB` it picks the left operand
         # and the right one is never walked.
@@ -152,15 +148,6 @@ def _function_param_names(node: dict) -> FrozenSet[str]:
             if literal:
                 names.add(literal.casefold())
     return frozenset(names)
-
-
-def _calls_unknown_function(node_map: NodeIdMap) -> bool:
-    """Whether the expression invokes a function that is not an M library call."""
-    return any(
-        (callee := get_invoke_callee_name(node_map, node)) is None or "." not in callee
-        for node in node_map.values()
-        if node.get("kind") == "InvokeExpression"
-    )
 
 
 def _root_node_id(node_map: NodeIdMap, parent_by_id: Optional[Dict[int, int]]) -> int:
@@ -301,6 +288,20 @@ def _walk(
                 parameters,
                 unresolved,
             )
+        return
+
+    # -- ParenthesizedExpression — transparent, unwrap and continue --
+    if kind == "ParenthesizedExpression":
+        _walk(
+            node_map,
+            node.get("content"),
+            scopes,
+            accessor_chain,
+            results,
+            seen,
+            parameters,
+            unresolved,
+        )
         return
 
     # -- EachExpression (`each <body>`) — the body is an ordinary expression --

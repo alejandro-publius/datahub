@@ -752,3 +752,28 @@ def test_bare_invoke_does_not_hide_external_data_source() -> None:
     )
     found = resolve_to_data_access_functions(node_map)
     assert [d.data_access_function_name for d in found] == ["Sql.Database"]
+
+
+def test_parenthesized_references_are_collected() -> None:
+    # Parentheses are transparent: the identifier inside is still a reference.
+    assert _refs("(DimDate)") == ["DimDate"]
+    assert _refs("let A = Table.Combine({(tblA), (tblB)}) in A") == ["tblA", "tblB"]
+
+
+def test_bare_invoke_beside_a_sibling_does_not_drop_it() -> None:
+    # An unknown call in one argument must not suppress sibling references in the
+    # others, and wrapping in a `let` must not change the answer.
+    assert _refs("Table.Combine({tblA, LOAD_DATA(x)})") == ["tblA"]
+    assert _refs("let A = Table.Combine({tblA, LOAD_DATA(x)}) in A") == ["tblA"]
+
+
+def test_comment_stripping_is_linear() -> None:
+    # Guard against a quadratic block-comment regex: an expression with many
+    # unclosed `/*` starts must not take super-linear time to classify.
+    import time
+
+    from datahub.ingestion.source.powerbi.m_query.parser import _looks_like_m_query
+
+    start = time.perf_counter()
+    _looks_like_m_query("/*x" * 40_000)
+    assert time.perf_counter() - start < 1.0
