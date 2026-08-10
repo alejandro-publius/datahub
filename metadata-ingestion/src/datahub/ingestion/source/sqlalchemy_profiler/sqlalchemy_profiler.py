@@ -1634,7 +1634,7 @@ class SQLAlchemyProfiler:
                             # and enumerating driver types would force hard imports of
                             # optional drivers (pymysql / psycopg2) that get_adapter
                             # exists to keep lazy.
-                            self.report.failure(
+                            self.report.warning(
                                 title="Profiling: AUTOCOMMIT unavailable",
                                 message=(
                                     "The database rejected the AUTOCOMMIT session "

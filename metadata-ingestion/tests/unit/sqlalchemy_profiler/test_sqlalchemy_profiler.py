@@ -804,8 +804,15 @@ class TestProfilingIsolationLevel:
             mock_adapter.setup_profiling.call_args[0][1]
             is mock_conn.execution_options.return_value
         )
-        # A successful apply is not a rejection — no failure entry.
-        profiler.report.failure.assert_not_called()
+        # A successful apply is not a rejection — no AUTOCOMMIT-unavailable warning.
+        # (report.warning may still be called by the outer handler for the
+        # short-circuit RuntimeError above; assert on the title, not call count.)
+        autocommit_warnings = [
+            c
+            for c in profiler.report.warning.call_args_list
+            if c.kwargs.get("title") == "Profiling: AUTOCOMMIT unavailable"
+        ]
+        assert not autocommit_warnings
 
     def test_does_not_apply_options_when_level_none(self, profiler):
         # When the adapter's hook returns None, conn.execution_options is not called
@@ -836,8 +843,15 @@ class TestProfilingIsolationLevel:
         mock_conn.execution_options.assert_not_called()
         # The raw checked-out connection flows downstream unchanged.
         assert mock_adapter.setup_profiling.call_args[0][1] is mock_conn
-        # No level was applied, so no rejection — no failure entry.
-        profiler.report.failure.assert_not_called()
+        # No level was applied, so no rejection — no AUTOCOMMIT-unavailable warning.
+        # (report.warning may still be called by the outer handler for the
+        # short-circuit RuntimeError above; assert on the title, not call count.)
+        autocommit_warnings = [
+            c
+            for c in profiler.report.warning.call_args_list
+            if c.kwargs.get("title") == "Profiling: AUTOCOMMIT unavailable"
+        ]
+        assert not autocommit_warnings
 
 
 class TestProfilingIsolationLevelRejection:
@@ -891,11 +905,11 @@ class TestProfilingIsolationLevelRejection:
             # SQLAlchemy did not invalidate it. A fallback can keep using it.
             assert conn.exec_driver_sql("SELECT 1").scalar() == 1
 
-    def test_rejection_reports_failure_and_still_profiles(
+    def test_rejection_reports_warning_and_still_profiles(
         self, profiler, sqlite_engine, test_table
     ):
         # Both halves: a rejected execution_options produces exactly one
-        # report failure titled "Profiling: AUTOCOMMIT unavailable" AND the
+        # report warning titled "Profiling: AUTOCOMMIT unavailable" AND the
         # table still produces a profile. The second assertion is the one that
         # matters — without it this test passes even when the fallback leaves
         # an unusable connection, which is the failure this design exists to
@@ -944,16 +958,16 @@ class TestProfilingIsolationLevelRejection:
         assert result_request == request
         # Half 2: the table still produces a profile despite the rejection.
         assert result_profile is not None
-        # Half 1: exactly one failure, titled and attributed correctly.
-        assert profiler.report.failure.call_count == 1
-        failure_call = profiler.report.failure.call_args
-        assert failure_call.kwargs["title"] == "Profiling: AUTOCOMMIT unavailable"
-        assert failure_call.kwargs["context"] == "test.my_table"
-        assert isinstance(failure_call.kwargs["exc"], sqlite3.OperationalError)
+        # Half 1: exactly one warning, titled and attributed correctly.
+        assert profiler.report.warning.call_count == 1
+        warning_call = profiler.report.warning.call_args
+        assert warning_call.kwargs["title"] == "Profiling: AUTOCOMMIT unavailable"
+        assert warning_call.kwargs["context"] == "test.my_table"
+        assert isinstance(warning_call.kwargs["exc"], sqlite3.OperationalError)
 
     def test_rejection_dedups_across_tables(self, sqlite_engine, profiler_config):
         # Pins the byte-identical-message constraint: profiling two tables
-        # under the same rejection produces one failure entry with two
+        # under the same rejection produces one warning entry with two
         # contexts, not two entries. A later edit that interpolates the
         # table name into `message` would fail here.
         real_report = SQLSourceReport()
@@ -1012,13 +1026,13 @@ class TestProfilingIsolationLevelRejection:
                 profiler._generate_profile_from_request(None, req)
 
         # One deduped entry, not two.
-        assert len(real_report.failures) == 1
-        failure = real_report.failures[0]
-        assert failure.title == "Profiling: AUTOCOMMIT unavailable"
+        assert len(real_report.warnings) == 1
+        warning = real_report.warnings[0]
+        assert warning.title == "Profiling: AUTOCOMMIT unavailable"
         # Both table contexts are attached to the single entry. The context
         # string carries the exception type/message suffix (see report_log),
         # so match on the table-name prefix rather than exact equality.
-        contexts = list(failure.context)
+        contexts = list(warning.context)
         assert len(contexts) == 2
         assert any(c.startswith("db.t1") for c in contexts)
         assert any(c.startswith("db.t2") for c in contexts)
