@@ -853,6 +853,46 @@ class TestProfilingIsolationLevel:
         ]
         assert not isolation_level_warnings
 
+    def test_profile_use_autocommit_false_skips_execution_options(self, profiler):
+        # The opt-out suppresses the adapter's own opt-in: the adapter returns
+        # "AUTOCOMMIT" but profile_use_autocommit is False, so execution_options
+        # is never called — no attempt, no warning, no degradation path, exactly
+        # the pre-PR behaviour.
+        profiler.config.catch_exceptions = True
+        profiler.config.profile_use_autocommit = False
+        with (
+            patch.object(profiler, "base_engine") as mock_engine,
+            patch(
+                "datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler.get_adapter"
+            ) as mock_get_adapter,
+        ):
+            mock_conn = MagicMock()
+            mock_engine.connect.return_value.__enter__.return_value = mock_conn
+            mock_adapter = MagicMock()
+            mock_adapter.profiling_isolation_level.return_value = "AUTOCOMMIT"
+            mock_adapter.setup_profiling.side_effect = RuntimeError("short-circuit")
+            mock_get_adapter.return_value = mock_adapter
+
+            profiler._generate_single_profile(
+                query_combiner=MagicMock(),
+                pretty_name="my_db.my_table",
+                schema="my_db",
+                table="my_table",
+                platform="mysql",
+            )
+
+        mock_conn.execution_options.assert_not_called()
+        # The flag being off is a documented setting, not a rejection, so no
+        # isolation-level-unavailable warning. (report.warning may still be
+        # called by the outer handler for the short-circuit RuntimeError above;
+        # assert on the title, not call count.)
+        isolation_level_warnings = [
+            c
+            for c in profiler.report.warning.call_args_list
+            if c.kwargs.get("title") == "Profiling: isolation level unavailable"
+        ]
+        assert not isolation_level_warnings
+
 
 class TestProfilingIsolationLevelRejection:
     """Documents what escapes ``conn.execution_options(isolation_level=...)`` when a

@@ -21,6 +21,29 @@ _PROFILING_FLAGS_TO_REPORT = {
 logger = logging.getLogger(__name__)
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    # Pydantic's default_factory runs only when the recipe omits the key, so
+    # recipe > env > built-in default falls out without a validator. Empty and
+    # unrecognised values fall back to the default rather than flipping the
+    # flag, so a malformed fleet-wide setting cannot silently disable profiling.
+    value = os.environ.get(name)
+    if value is None or value.strip() == "":
+        return default
+    cleaned = value.strip().lower()
+    if cleaned in ("true", "1", "yes"):
+        return True
+    if cleaned in ("false", "0", "no"):
+        return False
+    logger.warning(
+        "Unrecognised value %r for %s; falling back to default %r. "
+        "Accepted: true/false, 1/0, yes/no (case-insensitive).",
+        value,
+        name,
+        default,
+    )
+    return default
+
+
 class ProfilingMethodConfig(ConfigModel):
     # `method` used to select between the SQLAlchemy and the (now removed) Great
     # Expectations profiler. SQLAlchemy is the only SQL profiler, so the field is
@@ -181,6 +204,23 @@ class GEProfilingConfig(GEProfilingBaseConfig):
 
     # Hidden option - used for debugging purposes.
     catch_exceptions: bool = Field(default=True, description="")
+
+    profile_use_autocommit: Annotated[bool, SupportedSources(["mysql", "postgres"])] = (
+        Field(
+            default_factory=lambda: _env_flag("DATAHUB_PROFILE_USE_AUTOCOMMIT", True),
+            description=(
+                "Whether MySQL and Postgres profiling runs under AUTOCOMMIT, so each "
+                "profiling query is self-contained. Disable to restore one transaction "
+                "per table for the whole profile — a consistent snapshot, but this "
+                "reinstates the long-lived transaction that holds Postgres "
+                "idle-in-transaction and blocks VACUUM, or pins an InnoDB read view and "
+                "grows the undo log on MySQL. Set DATAHUB_PROFILE_USE_AUTOCOMMIT to "
+                "change the default without editing recipes; an explicit value in the "
+                "recipe wins where both are present. Superseded by profiling_consistency "
+                "in a future release."
+            ),
+        )
+    )
 
     partition_profiling_enabled: Annotated[
         bool, SupportedSources(["athena", "bigquery"])

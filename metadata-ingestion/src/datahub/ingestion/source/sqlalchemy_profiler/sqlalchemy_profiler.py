@@ -1601,7 +1601,10 @@ class SQLAlchemyProfiler:
                 logger.info(f"Profiling {pretty_name}")
                 with self.base_engine.connect() as conn:
                     isolation_level = adapter.profiling_isolation_level()
-                    if isolation_level is not None:
+                    if (
+                        isolation_level is not None
+                        and self.config.profile_use_autocommit
+                    ):
                         # Must be the first operation on this connection — the isolation level
                         # cannot be changed once a transaction is in progress. Re-applied on
                         # every checkout because SQLAlchemy reverts it on pool return.
