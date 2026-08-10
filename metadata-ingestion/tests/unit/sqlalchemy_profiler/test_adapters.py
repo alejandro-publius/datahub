@@ -1,5 +1,8 @@
 """Unit tests for platform adapters."""
 
+import importlib
+import inspect
+import pkgutil
 import re
 from typing import Any
 from unittest.mock import MagicMock, Mock, patch
@@ -39,7 +42,10 @@ from datahub.ingestion.source.sqlalchemy_profiler.adapters.snowflake import (
     SnowflakeAdapter,
 )
 from datahub.ingestion.source.sqlalchemy_profiler.adapters.trino import TrinoAdapter
-from datahub.ingestion.source.sqlalchemy_profiler.base_adapter import DEFAULT_QUANTILES
+from datahub.ingestion.source.sqlalchemy_profiler.base_adapter import (
+    DEFAULT_QUANTILES,
+    PlatformAdapter,
+)
 from datahub.ingestion.source.sqlalchemy_profiler.profiling_context import (
     ProfilingContext,
 )
@@ -1894,3 +1900,78 @@ class TestClickHouseAdapter:
         t3.schema = None
         t3.name = None
         assert _format_context(t3) == "<unknown>"
+
+
+class TestProfilingIsolationLevelOptIn:
+    """The opt-in roster is an executable invariant, not a docstring claim.
+
+    Discovers every concrete ``PlatformAdapter`` subclass under
+    ``datahub.ingestion.source.sqlalchemy_profiler`` by walking the adapters
+    package, instantiates each without running ``__init__``, and asserts that
+    exactly ``MySQLAdapter`` and ``PostgresAdapter`` return a non-None isolation
+    level. A newly added adapter that opts in without review fails this test
+    loudly rather than being silently skipped.
+    """
+
+    _ADAPTERS_PACKAGE = "datahub.ingestion.source.sqlalchemy_profiler.adapters"
+    _MODULE_PREFIX = "datahub.ingestion.source.sqlalchemy_profiler"
+
+    @classmethod
+    def _discover_concrete_adapters(cls) -> list[type[PlatformAdapter]]:
+        import datahub.ingestion.source.sqlalchemy_profiler.adapters as adapters_pkg
+
+        # Force the lazy imports: iterate every submodule of the adapters
+        # package and import it, so PlatformAdapter.__subclasses__ sees all of
+        # them. A missing optional dependency is a real gap — fail loudly rather
+        # than silently skipping, naming the module that failed.
+        for module_info in pkgutil.iter_modules(adapters_pkg.__path__):
+            full_name = f"{cls._ADAPTERS_PACKAGE}.{module_info.name}"
+            try:
+                importlib.import_module(full_name)
+            except ImportError as e:
+                pytest.fail(
+                    f"Adapter module {full_name} failed to import; install the "
+                    f"corresponding dev extra. Underlying error: {e}"
+                )
+
+        # Recursive transitive closure of PlatformAdapter subclasses —
+        # __subclasses__() returns direct subclasses only and the hierarchy is
+        # not flat.
+        seen: set[type[PlatformAdapter]] = set()
+        stack: list[type[PlatformAdapter]] = list(PlatformAdapter.__subclasses__())
+        while stack:
+            cls_ = stack.pop()
+            if cls_ in seen:
+                continue
+            seen.add(cls_)
+            stack.extend(cls_.__subclasses__())
+
+        # Keep only classes defined under the sqlalchemy_profiler package, so a
+        # FakeAdapter defined in a test module that pytest has imported in the
+        # same session cannot pollute the set. Skip abstract classes —
+        # object.__new__ would raise TypeError on a non-empty __abstractmethods__.
+        prefix = cls._MODULE_PREFIX
+        return [
+            cls_
+            for cls_ in seen
+            if cls_.__module__.startswith(prefix) and not inspect.isabstract(cls_)
+        ]
+
+    def test_only_mysql_and_postgres_opt_in(self):
+        # profiling_isolation_level() is called on an instance that never ran
+        # __init__. This is valid only while every implementation returns a
+        # constant independent of self.config / self.base_engine. If one ever
+        # consults instance state, this test will fail with AttributeError — the
+        # correct outcome, since an engine-dependent hook invalidates the roster
+        # premise, but it will read as a bug to whoever hits it unless this note
+        # is here.
+        roster: dict[type[PlatformAdapter], Any] = {}
+        for cls_ in self._discover_concrete_adapters():
+            instance = object.__new__(cls_)
+            roster[cls_] = instance.profiling_isolation_level()
+
+        opted_in = {c.__name__: v for c, v in roster.items() if v is not None}
+        assert opted_in == {
+            "MySQLAdapter": "AUTOCOMMIT",
+            "PostgresAdapter": "AUTOCOMMIT",
+        }, f"full roster: {sorted((c.__name__, v) for c, v in roster.items())}"

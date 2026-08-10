@@ -9,17 +9,16 @@ from sqlalchemy import Column, Float, Integer, String, create_engine
 from datahub.ingestion.source.ge_profiling_config import ProfilingConfig
 from datahub.ingestion.source.profiling.common import Cardinality, ProfilerRequest
 from datahub.ingestion.source.sql.sql_report import SQLSourceReport
-from datahub.ingestion.source.sqlalchemy_profiler.adapters import get_adapter
-from datahub.ingestion.source.sqlalchemy_profiler.adapters.mysql import (
-    MySQLAdapter,
-)
-from datahub.ingestion.source.sqlalchemy_profiler.adapters.postgres import (
-    PostgresAdapter,
-)
 from datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler import (
     SQLAlchemyProfiler,
 )
 from datahub.ingestion.source.sqlalchemy_profiler.type_mapping import ProfilerDataType
+
+# Tests that patch `get_adapter` with a MagicMock must pin
+# `mock_adapter.profiling_isolation_level.return_value = None`: the per-table path
+# calls that hook, and a bare MagicMock returns a MagicMock (not None), which would
+# be passed into `execution_options` as an isolation level. Pinning to None skips
+# the level block, matching these tests' pre-feature behaviour.
 
 
 @pytest.fixture
@@ -211,10 +210,6 @@ class TestSQLAlchemyProfiler:
                 "permission denied"
             )
             mock_get_adapter.return_value = mock_adapter
-            # The per-table path now calls adapter.profiling_isolation_level(); a bare
-            # MagicMock returns a MagicMock (not None), which would be passed into
-            # execution_options as an isolation level. Pin it to None so the level
-            # block is skipped, matching these tests' pre-feature behaviour.
             mock_adapter.profiling_isolation_level.return_value = None
 
             # Should return tuple (request, None) and log warning, not raise
@@ -257,10 +252,6 @@ class TestSQLAlchemyProfiler:
                 "permission denied"
             )
             mock_get_adapter.return_value = mock_adapter
-            # The per-table path now calls adapter.profiling_isolation_level(); a bare
-            # MagicMock returns a MagicMock (not None), which would be passed into
-            # execution_options as an isolation level. Pin it to None so the level
-            # block is skipped, matching these tests' pre-feature behaviour.
             mock_adapter.profiling_isolation_level.return_value = None
 
             # Should re-raise the exception
@@ -292,10 +283,6 @@ class TestSQLAlchemyProfiler:
                 "database error", None, None
             )
             mock_get_adapter.return_value = mock_adapter
-            # The per-table path now calls adapter.profiling_isolation_level(); a bare
-            # MagicMock returns a MagicMock (not None), which would be passed into
-            # execution_options as an isolation level. Pin it to None so the level
-            # block is skipped, matching these tests' pre-feature behaviour.
             mock_adapter.profiling_isolation_level.return_value = None
 
             # Should return tuple (request, None) and log warning, not raise
@@ -337,10 +324,6 @@ class TestSQLAlchemyProfiler:
                 "database error", None, None
             )
             mock_get_adapter.return_value = mock_adapter
-            # The per-table path now calls adapter.profiling_isolation_level(); a bare
-            # MagicMock returns a MagicMock (not None), which would be passed into
-            # execution_options as an isolation level. Pin it to None so the level
-            # block is skipped, matching these tests' pre-feature behaviour.
             mock_adapter.profiling_isolation_level.return_value = None
 
             # Should re-raise the exception
@@ -372,10 +355,6 @@ class TestSQLAlchemyProfiler:
                 "connection lost"
             )
             mock_get_adapter.return_value = mock_adapter
-            # The per-table path now calls adapter.profiling_isolation_level(); a bare
-            # MagicMock returns a MagicMock (not None), which would be passed into
-            # execution_options as an isolation level. Pin it to None so the level
-            # block is skipped, matching these tests' pre-feature behaviour.
             mock_adapter.profiling_isolation_level.return_value = None
 
             # Should return tuple (request, None) and log warning, not raise
@@ -413,10 +392,6 @@ class TestSQLAlchemyProfiler:
             mock_adapter = MagicMock()
             mock_adapter.setup_profiling.side_effect = RuntimeError("unexpected error")
             mock_get_adapter.return_value = mock_adapter
-            # The per-table path now calls adapter.profiling_isolation_level(); a bare
-            # MagicMock returns a MagicMock (not None), which would be passed into
-            # execution_options as an isolation level. Pin it to None so the level
-            # block is skipped, matching these tests' pre-feature behaviour.
             mock_adapter.profiling_isolation_level.return_value = None
 
             # Should return tuple (request, None) and log warning, not raise
@@ -454,10 +429,6 @@ class TestSQLAlchemyProfiler:
             mock_adapter = MagicMock()
             mock_adapter.setup_profiling.side_effect = RuntimeError("unexpected error")
             mock_get_adapter.return_value = mock_adapter
-            # The per-table path now calls adapter.profiling_isolation_level(); a bare
-            # MagicMock returns a MagicMock (not None), which would be passed into
-            # execution_options as an isolation level. Pin it to None so the level
-            # block is skipped, matching these tests' pre-feature behaviour.
             mock_adapter.profiling_isolation_level.return_value = None
 
             # Should re-raise the exception
@@ -485,10 +456,6 @@ class TestSQLAlchemyProfiler:
             mock_adapter = MagicMock()
             mock_adapter.setup_profiling.side_effect = RuntimeError("test error")
             mock_get_adapter.return_value = mock_adapter
-            # The per-table path now calls adapter.profiling_isolation_level(); a bare
-            # MagicMock returns a MagicMock (not None), which would be passed into
-            # execution_options as an isolation level. Pin it to None so the level
-            # block is skipped, matching these tests' pre-feature behaviour.
             mock_adapter.profiling_isolation_level.return_value = None
 
             # Execute profiling (will fail)
@@ -696,10 +663,6 @@ class TestSQLAlchemyProfiler:
             )
 
             mock_get_adapter.return_value = mock_adapter
-            # The per-table path now calls adapter.profiling_isolation_level(); a bare
-            # MagicMock returns a MagicMock (not None), which would be passed into
-            # execution_options as an isolation level. Pin it to None so the level
-            # block is skipped, matching these tests' pre-feature behaviour.
             mock_adapter.profiling_isolation_level.return_value = None
 
             # Attempt to profile - should return None for failed profiling
@@ -772,10 +735,6 @@ class TestSQLAlchemyProfiler:
             mock_adapter.setup_profiling.return_value = mock_context
             mock_adapter.cleanup.return_value = None
             mock_get_adapter.return_value = mock_adapter
-            # The per-table path now calls adapter.profiling_isolation_level(); a bare
-            # MagicMock returns a MagicMock (not None), which would be passed into
-            # execution_options as an isolation level. Pin it to None so the level
-            # block is skipped, matching these tests' pre-feature behaviour.
             mock_adapter.profiling_isolation_level.return_value = None
 
             # Attempt to profile - should return basic profile
@@ -876,37 +835,52 @@ class TestProfilingIsolationLevel:
         assert mock_adapter.setup_profiling.call_args[0][1] is mock_conn
 
 
-class TestProfilingIsolationLevelOptIn:
-    """The opt-in roster is an executable invariant, not a docstring claim.
+class TestProfilingIsolationLevelRejection:
+    """Documents what escapes ``conn.execution_options(isolation_level=...)`` when a
+    server or proxy rejects the session setting.
 
-    Instantiates every adapter class the factory can return (one platform per
-    branch of get_adapter, plus the generic fallback) and asserts that exactly
-    MySQLAdapter and PostgresAdapter return a non-None isolation level. A newly
-    added adapter that opts in without review fails this test loudly rather than
-    being silently skipped.
+    A rejection inside ``dialect.set_isolation_level`` surfaces as the *raw* driver
+    error: SQLAlchemy does not wrap it in ``sa.exc.DBAPIError`` / ``SQLAlchemyError``
+    because ``execution_options`` does not go through statement execution (where
+    ``_handle_dbapi_exception`` lives). These assertions record the observed
+    behaviour against SQLAlchemy 1.4 so the phase-2 response — whichever of the
+    §3.2 options is chosen — can build on it. No behaviour change is asserted here.
     """
 
-    # One platform per branch of get_adapter in adapters/__init__.py, plus the
-    # generic fallback. Keep one entry per branch so a new branch is exercised.
-    _ALL_FACTORY_PLATFORMS = [
-        "bigquery",
-        "athena",
-        "postgresql",
-        "mysql",
-        "mssql",
-        "redshift",
-        "snowflake",
-        "databricks",
-        "trino",
-        "clickhouse",
-        "unknown_platform",  # generic fallback
-    ]
+    def test_rejection_escapes_as_raw_driver_error_not_sa_exc(self):
+        # Stands in for a driver-native error that is NOT in the sa.exc hierarchy
+        # (e.g. pymysql.err.OperationalError, psycopg2.ProgrammingError).
+        class _DriverRejection(Exception):
+            pass
 
-    def test_only_mysql_and_postgres_opt_in(self, profiler_config, mock_report):
-        opted_in = set()
-        for platform in self._ALL_FACTORY_PLATFORMS:
-            adapter = get_adapter(platform, profiler_config, mock_report, MagicMock())
-            if adapter.profiling_isolation_level() is not None:
-                opted_in.add(type(adapter))
+        engine = create_engine("sqlite:///:memory:")
+        with engine.connect() as conn:
+            with patch.object(
+                engine.dialect,
+                "set_isolation_level",
+                side_effect=_DriverRejection("proxy refuses AUTOCOMMIT"),
+            ):
+                with pytest.raises(_DriverRejection) as exc_info:
+                    conn.execution_options(isolation_level="AUTOCOMMIT")
 
-        assert opted_in == {MySQLAdapter, PostgresAdapter}
+                escaped = exc_info.value
+                assert not isinstance(escaped, sa.exc.SQLAlchemyError)
+                assert not isinstance(escaped, sa.exc.DBAPIError)
+
+    def test_connection_remains_usable_after_rejection(self):
+        class _DriverRejection(Exception):
+            pass
+
+        engine = create_engine("sqlite:///:memory:")
+        with engine.connect() as conn:
+            with patch.object(
+                engine.dialect,
+                "set_isolation_level",
+                side_effect=_DriverRejection("nope"),
+            ):
+                with pytest.raises(_DriverRejection):
+                    conn.execution_options(isolation_level="AUTOCOMMIT")
+
+            # The rebind never ran, so `conn` is still the original object and
+            # SQLAlchemy did not invalidate it. A fallback can keep using it.
+            assert conn.exec_driver_sql("SELECT 1").scalar() == 1
