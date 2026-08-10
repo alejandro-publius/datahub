@@ -6,20 +6,20 @@
       "workspaces": [
         {
           "id": "64ED5CAD-7C10-4684-8180-826122881108",
-          "name": "Marketing",
+          "name": "Analytics",
           "type": "Workspace",
           "state": "Active",
           "datasets": [
             {
               "id": "a8149dea-aa76-44e7-b6a2-cb888b71443f",
-              "name": "marketing-dataset",
+              "name": "sales-dataset",
               "description": "Dataset whose tables reference each other by name",
               "tables": [
                 {
-                  "name": "fact_new_names",
+                  "name": "fact_orders",
                   "source": [
                     {
-                      "expression": "let\n    Source = Sql.Database(\"localhost\", \"datarepository\"),\n    dbo_new_names = Source{[Schema=\"dbo\",Item=\"new_names\"]}[Data]\nin\n    dbo_new_names"
+                      "expression": "let\n    Source = Sql.Database(\"localhost\", \"warehouse\"),\n    dbo_orders = Source{[Schema=\"dbo\",Item=\"orders\"]}[Data]\nin\n    dbo_orders"
                     }
                   ],
                   "columns": [
@@ -36,10 +36,10 @@
                   ]
                 },
                 {
-                  "name": "new_names_ref",
+                  "name": "orders_ref",
                   "source": [
                     {
-                      "expression": "let\n    Source = #\"fact_new_names\"\nin\n    Source"
+                      "expression": "let\n    Source = #\"fact_orders\"\nin\n    Source"
                     }
                   ],
                   "columns": [
@@ -56,10 +56,10 @@
                   ]
                 },
                 {
-                  "name": "combined_names",
+                  "name": "orders_combined",
                   "source": [
                     {
-                      "expression": "let\n    Source = Table.Combine({#\"fact_new_names\", #\"new_names_ref\"})\nin\n    Source"
+                      "expression": "let\n    Source = Table.Combine({#\"fact_orders\", #\"orders_ref\"})\nin\n    Source"
                     }
                   ],
                   "columns": [
@@ -76,10 +76,10 @@
                   ]
                 },
                 {
-                  "name": "names_summary",
+                  "name": "orders_summary",
                   "source": [
                     {
-                      "expression": "summarize('fact_new_names', 'fact_new_names'[name])"
+                      "expression": "summarize('fact_orders', 'fact_orders'[name])"
                     }
                   ],
                   "columns": [

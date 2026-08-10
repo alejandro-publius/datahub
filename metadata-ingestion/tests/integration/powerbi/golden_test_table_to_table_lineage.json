@@ -1,13 +1,13 @@
 [
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV)",
     "changeType": "UPSERT",
     "aspectName": "viewProperties",
     "aspect": {
         "json": {
             "materialized": false,
-            "viewLogic": "let\n    Source = Sql.Database(\"localhost\", \"datarepository\"),\n    dbo_new_names = Source{[Schema=\"dbo\",Item=\"new_names\"]}[Data]\nin\n    dbo_new_names",
+            "viewLogic": "let\n    Source = Sql.Database(\"localhost\", \"warehouse\"),\n    dbo_orders = Source{[Schema=\"dbo\",Item=\"orders\"]}[Data]\nin\n    dbo_orders",
             "viewLanguage": "m_query"
         }
     },
@@ -19,12 +19,12 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV)",
     "changeType": "UPSERT",
     "aspectName": "schemaMetadata",
     "aspect": {
         "json": {
-            "schemaName": "fact_new_names",
+            "schemaName": "fact_orders",
             "platform": "urn:li:dataPlatform:powerbi",
             "version": 0,
             "created": {
@@ -77,7 +77,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV)",
     "changeType": "UPSERT",
     "aspectName": "datasetProperties",
     "aspect": {
@@ -86,7 +86,7 @@
                 "datasetId": "a8149dea-aa76-44e7-b6a2-cb888b71443f"
             },
             "externalUrl": "https://app.powerbi.com/groups/64ED5CAD-7C10-4684-8180-826122881108/datasets/a8149dea-aa76-44e7-b6a2-cb888b71443f/details",
-            "name": "fact_new_names",
+            "name": "fact_orders",
             "description": "Dataset whose tables reference each other by name",
             "tags": []
         }
@@ -99,7 +99,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV)",
     "changeType": "UPSERT",
     "aspectName": "status",
     "aspect": {
@@ -115,7 +115,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV)",
     "changeType": "UPSERT",
     "aspectName": "subTypes",
     "aspect": {
@@ -133,7 +133,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV)",
     "changeType": "UPSERT",
     "aspectName": "dataPlatformInstance",
     "aspect": {
@@ -149,7 +149,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV)",
     "changeType": "UPSERT",
     "aspectName": "upstreamLineage",
     "aspect": {
@@ -160,7 +160,7 @@
                         "time": 0,
                         "actor": "urn:li:corpuser:unknown"
                     },
-                    "dataset": "urn:li:dataset:(urn:li:dataPlatform:mssql,datarepository.dbo.new_names,PROD)",
+                    "dataset": "urn:li:dataset:(urn:li:dataPlatform:mssql,warehouse.dbo.orders,PROD)",
                     "type": "TRANSFORMED"
                 }
             ],
@@ -168,22 +168,22 @@
                 {
                     "upstreamType": "FIELD_SET",
                     "upstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:mssql,datarepository.dbo.new_names,PROD),name)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:mssql,warehouse.dbo.orders,PROD),name)"
                     ],
                     "downstreamType": "FIELD",
                     "downstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),name)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV),name)"
                     ],
                     "confidenceScore": 1.0
                 },
                 {
                     "upstreamType": "FIELD_SET",
                     "upstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:mssql,datarepository.dbo.new_names,PROD),region)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:mssql,warehouse.dbo.orders,PROD),region)"
                     ],
                     "downstreamType": "FIELD",
                     "downstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),region)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV),region)"
                     ],
                     "confidenceScore": 1.0
                 }
@@ -198,7 +198,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV)",
     "changeType": "UPSERT",
     "aspectName": "browsePathsV2",
     "aspect": {
@@ -209,7 +209,7 @@
                     "urn": "urn:li:container:a4ed52f9abd3ff9cc34960c0c41f72e9"
                 },
                 {
-                    "id": "marketing-dataset"
+                    "id": "sales-dataset"
                 }
             ]
         }
@@ -222,13 +222,13 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_ref,DEV)",
     "changeType": "UPSERT",
     "aspectName": "viewProperties",
     "aspect": {
         "json": {
             "materialized": false,
-            "viewLogic": "let\n    Source = #\"fact_new_names\"\nin\n    Source",
+            "viewLogic": "let\n    Source = #\"fact_orders\"\nin\n    Source",
             "viewLanguage": "m_query"
         }
     },
@@ -240,12 +240,12 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_ref,DEV)",
     "changeType": "UPSERT",
     "aspectName": "schemaMetadata",
     "aspect": {
         "json": {
-            "schemaName": "new_names_ref",
+            "schemaName": "orders_ref",
             "platform": "urn:li:dataPlatform:powerbi",
             "version": 0,
             "created": {
@@ -298,7 +298,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_ref,DEV)",
     "changeType": "UPSERT",
     "aspectName": "datasetProperties",
     "aspect": {
@@ -307,7 +307,7 @@
                 "datasetId": "a8149dea-aa76-44e7-b6a2-cb888b71443f"
             },
             "externalUrl": "https://app.powerbi.com/groups/64ED5CAD-7C10-4684-8180-826122881108/datasets/a8149dea-aa76-44e7-b6a2-cb888b71443f/details",
-            "name": "new_names_ref",
+            "name": "orders_ref",
             "description": "Dataset whose tables reference each other by name",
             "tags": []
         }
@@ -320,7 +320,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_ref,DEV)",
     "changeType": "UPSERT",
     "aspectName": "status",
     "aspect": {
@@ -336,7 +336,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_ref,DEV)",
     "changeType": "UPSERT",
     "aspectName": "subTypes",
     "aspect": {
@@ -354,7 +354,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_ref,DEV)",
     "changeType": "UPSERT",
     "aspectName": "dataPlatformInstance",
     "aspect": {
@@ -370,7 +370,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_ref,DEV)",
     "changeType": "UPSERT",
     "aspectName": "upstreamLineage",
     "aspect": {
@@ -381,7 +381,7 @@
                         "time": 0,
                         "actor": "urn:li:corpuser:unknown"
                     },
-                    "dataset": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV)",
+                    "dataset": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV)",
                     "type": "TRANSFORMED"
                 }
             ],
@@ -389,22 +389,22 @@
                 {
                     "upstreamType": "FIELD_SET",
                     "upstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),name)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV),name)"
                     ],
                     "downstreamType": "FIELD",
                     "downstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV),name)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_ref,DEV),name)"
                     ],
                     "confidenceScore": 1.0
                 },
                 {
                     "upstreamType": "FIELD_SET",
                     "upstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),region)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV),region)"
                     ],
                     "downstreamType": "FIELD",
                     "downstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV),region)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_ref,DEV),region)"
                     ],
                     "confidenceScore": 1.0
                 }
@@ -419,7 +419,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_ref,DEV)",
     "changeType": "UPSERT",
     "aspectName": "browsePathsV2",
     "aspect": {
@@ -430,7 +430,7 @@
                     "urn": "urn:li:container:a4ed52f9abd3ff9cc34960c0c41f72e9"
                 },
                 {
-                    "id": "marketing-dataset"
+                    "id": "sales-dataset"
                 }
             ]
         }
@@ -443,13 +443,13 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_combined,DEV)",
     "changeType": "UPSERT",
     "aspectName": "viewProperties",
     "aspect": {
         "json": {
             "materialized": false,
-            "viewLogic": "let\n    Source = Table.Combine({#\"fact_new_names\", #\"new_names_ref\"})\nin\n    Source",
+            "viewLogic": "let\n    Source = Table.Combine({#\"fact_orders\", #\"orders_ref\"})\nin\n    Source",
             "viewLanguage": "m_query"
         }
     },
@@ -461,12 +461,12 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_combined,DEV)",
     "changeType": "UPSERT",
     "aspectName": "schemaMetadata",
     "aspect": {
         "json": {
-            "schemaName": "combined_names",
+            "schemaName": "orders_combined",
             "platform": "urn:li:dataPlatform:powerbi",
             "version": 0,
             "created": {
@@ -519,7 +519,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_combined,DEV)",
     "changeType": "UPSERT",
     "aspectName": "datasetProperties",
     "aspect": {
@@ -528,7 +528,7 @@
                 "datasetId": "a8149dea-aa76-44e7-b6a2-cb888b71443f"
             },
             "externalUrl": "https://app.powerbi.com/groups/64ED5CAD-7C10-4684-8180-826122881108/datasets/a8149dea-aa76-44e7-b6a2-cb888b71443f/details",
-            "name": "combined_names",
+            "name": "orders_combined",
             "description": "Dataset whose tables reference each other by name",
             "tags": []
         }
@@ -541,7 +541,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_combined,DEV)",
     "changeType": "UPSERT",
     "aspectName": "status",
     "aspect": {
@@ -557,7 +557,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_combined,DEV)",
     "changeType": "UPSERT",
     "aspectName": "subTypes",
     "aspect": {
@@ -575,7 +575,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_combined,DEV)",
     "changeType": "UPSERT",
     "aspectName": "dataPlatformInstance",
     "aspect": {
@@ -591,7 +591,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_combined,DEV)",
     "changeType": "UPSERT",
     "aspectName": "upstreamLineage",
     "aspect": {
@@ -602,7 +602,7 @@
                         "time": 0,
                         "actor": "urn:li:corpuser:unknown"
                     },
-                    "dataset": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV)",
+                    "dataset": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV)",
                     "type": "TRANSFORMED"
                 },
                 {
@@ -610,7 +610,7 @@
                         "time": 0,
                         "actor": "urn:li:corpuser:unknown"
                     },
-                    "dataset": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV)",
+                    "dataset": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_ref,DEV)",
                     "type": "TRANSFORMED"
                 }
             ],
@@ -618,44 +618,44 @@
                 {
                     "upstreamType": "FIELD_SET",
                     "upstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),name)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV),name)"
                     ],
                     "downstreamType": "FIELD",
                     "downstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV),name)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_combined,DEV),name)"
                     ],
                     "confidenceScore": 1.0
                 },
                 {
                     "upstreamType": "FIELD_SET",
                     "upstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),region)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV),region)"
                     ],
                     "downstreamType": "FIELD",
                     "downstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV),region)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_combined,DEV),region)"
                     ],
                     "confidenceScore": 1.0
                 },
                 {
                     "upstreamType": "FIELD_SET",
                     "upstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV),name)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_ref,DEV),name)"
                     ],
                     "downstreamType": "FIELD",
                     "downstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV),name)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_combined,DEV),name)"
                     ],
                     "confidenceScore": 1.0
                 },
                 {
                     "upstreamType": "FIELD_SET",
                     "upstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.new_names_ref,DEV),region)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_ref,DEV),region)"
                     ],
                     "downstreamType": "FIELD",
                     "downstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV),region)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_combined,DEV),region)"
                     ],
                     "confidenceScore": 1.0
                 }
@@ -670,7 +670,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.combined_names,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_combined,DEV)",
     "changeType": "UPSERT",
     "aspectName": "browsePathsV2",
     "aspect": {
@@ -681,7 +681,7 @@
                     "urn": "urn:li:container:a4ed52f9abd3ff9cc34960c0c41f72e9"
                 },
                 {
-                    "id": "marketing-dataset"
+                    "id": "sales-dataset"
                 }
             ]
         }
@@ -694,13 +694,13 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.names_summary,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_summary,DEV)",
     "changeType": "UPSERT",
     "aspectName": "viewProperties",
     "aspect": {
         "json": {
             "materialized": false,
-            "viewLogic": "summarize('fact_new_names', 'fact_new_names'[name])",
+            "viewLogic": "summarize('fact_orders', 'fact_orders'[name])",
             "viewLanguage": "m_query"
         }
     },
@@ -712,12 +712,12 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.names_summary,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_summary,DEV)",
     "changeType": "UPSERT",
     "aspectName": "schemaMetadata",
     "aspect": {
         "json": {
-            "schemaName": "names_summary",
+            "schemaName": "orders_summary",
             "platform": "urn:li:dataPlatform:powerbi",
             "version": 0,
             "created": {
@@ -770,7 +770,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.names_summary,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_summary,DEV)",
     "changeType": "UPSERT",
     "aspectName": "datasetProperties",
     "aspect": {
@@ -779,7 +779,7 @@
                 "datasetId": "a8149dea-aa76-44e7-b6a2-cb888b71443f"
             },
             "externalUrl": "https://app.powerbi.com/groups/64ED5CAD-7C10-4684-8180-826122881108/datasets/a8149dea-aa76-44e7-b6a2-cb888b71443f/details",
-            "name": "names_summary",
+            "name": "orders_summary",
             "description": "Dataset whose tables reference each other by name",
             "tags": []
         }
@@ -792,7 +792,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.names_summary,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_summary,DEV)",
     "changeType": "UPSERT",
     "aspectName": "status",
     "aspect": {
@@ -808,7 +808,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.names_summary,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_summary,DEV)",
     "changeType": "UPSERT",
     "aspectName": "subTypes",
     "aspect": {
@@ -826,7 +826,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.names_summary,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_summary,DEV)",
     "changeType": "UPSERT",
     "aspectName": "dataPlatformInstance",
     "aspect": {
@@ -842,7 +842,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.names_summary,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_summary,DEV)",
     "changeType": "UPSERT",
     "aspectName": "upstreamLineage",
     "aspect": {
@@ -853,7 +853,7 @@
                         "time": 0,
                         "actor": "urn:li:corpuser:unknown"
                     },
-                    "dataset": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV)",
+                    "dataset": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV)",
                     "type": "TRANSFORMED"
                 }
             ],
@@ -861,22 +861,22 @@
                 {
                     "upstreamType": "FIELD_SET",
                     "upstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),name)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV),name)"
                     ],
                     "downstreamType": "FIELD",
                     "downstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.names_summary,DEV),name)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_summary,DEV),name)"
                     ],
                     "confidenceScore": 1.0
                 },
                 {
                     "upstreamType": "FIELD_SET",
                     "upstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.fact_new_names,DEV),region)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.fact_orders,DEV),region)"
                     ],
                     "downstreamType": "FIELD",
                     "downstreams": [
-                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.names_summary,DEV),region)"
+                        "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_summary,DEV),region)"
                     ],
                     "confidenceScore": 1.0
                 }
@@ -891,7 +891,7 @@
 },
 {
     "entityType": "dataset",
-    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,marketing-dataset.names_summary,DEV)",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,sales-dataset.orders_summary,DEV)",
     "changeType": "UPSERT",
     "aspectName": "browsePathsV2",
     "aspect": {
@@ -902,7 +902,7 @@
                     "urn": "urn:li:container:a4ed52f9abd3ff9cc34960c0c41f72e9"
                 },
                 {
-                    "id": "marketing-dataset"
+                    "id": "sales-dataset"
                 }
             ]
         }
