@@ -872,7 +872,7 @@ class TestProfilingIsolationLevelRejection:
 
     def test_rejection_escapes_as_raw_driver_error_not_sa_exc(self):
         engine = create_engine("sqlite:///:memory:")
-        assert issubclass(sqlite3.OperationalError, engine.dialect.dbapi.Error)
+        assert issubclass(sqlite3.OperationalError, engine.dialect.dbapi.Error)  # type: ignore[attr-defined]
 
         with engine.connect() as conn:
             with patch.object(
@@ -1023,7 +1023,7 @@ class TestProfilingIsolationLevelRejection:
             mock_get_adapter.return_value = mock_adapter
 
             for req in requests:
-                profiler._generate_profile_from_request(None, req)
+                profiler._generate_profile_from_request(None, req)  # type: ignore[arg-type]
 
         # One deduped entry, not two.
         assert len(real_report.warnings) == 1
