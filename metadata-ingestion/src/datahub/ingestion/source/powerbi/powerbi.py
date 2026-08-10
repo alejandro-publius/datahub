@@ -448,7 +448,7 @@ class Mapper:
         if dataset is None:
             # Candidates were found but there's no parent dataset to resolve them
             # against — surface it rather than dropping them silently.
-            self.__reporter.m_query_table_to_table_no_dataset += 1
+            self.__reporter.m_query_table_to_table_no_dataset += len(table_references)
             self.__reporter.warning(
                 title="Table-to-table lineage skipped",
                 message="Table has sibling-table references but no parent dataset; "

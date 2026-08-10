@@ -194,11 +194,13 @@ def get_upstream_tables(
         # No `let` keyword — most often a DAX calculated-table expression (e.g.
         # summarize('T', ...)). Try to extract sibling-table references before
         # treating it as an unsupported non-M expression.
-        table_refs = (
-            dax_resolver.extract_dax_table_references(expression, reporter=reporter)
-            if config.extract_table_to_table_lineage
-            else []
-        )
+        if config.extract_table_to_table_lineage:
+            table_refs = dax_resolver.extract_dax_table_references(
+                expression, reporter=reporter
+            )
+        else:
+            table_refs = []
+            reporter.m_query_table_to_table_disabled += 1
         if table_refs:
             reporter.m_query_dax_table_lineage += 1
             return [Lineage(powerbi_table_upstreams=table_refs)]

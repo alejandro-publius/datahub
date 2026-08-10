@@ -777,3 +777,62 @@ def test_comment_stripping_is_linear() -> None:
     start = time.perf_counter()
     _looks_like_m_query("/*x" * 40_000)
     assert time.perf_counter() - start < 1.0
+
+
+def test_ambiguous_sibling_name_emits_no_edge() -> None:
+    # Two tables normalising to the same name make a reference ambiguous;
+    # binding it to either would be arbitrary, so no edge is emitted.
+    config = _config()
+    child = Table(name="C", full_name="d1.C")
+    _dataset_with_tables(
+        [
+            child,
+            Table(name="Sales", full_name="d1.Sales"),
+            Table(name="SALES", full_name="d1.SALES"),
+        ]
+    )
+    assert _mapper(config)._table_reference_upstreams(["sales"], child) == []
+
+
+def test_no_dataset_counter_reflects_every_dropped_candidate() -> None:
+    config = _config()
+    orphan = Table(name="O", full_name="d1.O")  # no parent dataset
+    reporter = PowerBiDashboardSourceReport()
+    mapper = Mapper(
+        ctx=PipelineContext(run_id="test-run-id"),
+        config=config,
+        reporter=reporter,
+        dataplatform_instance_resolver=ResolvePlatformInstanceFromDatasetTypeMapping(
+            config
+        ),
+    )
+
+    mapper._table_reference_upstreams(["a", "b", "c"], orphan)
+
+    assert reporter.m_query_table_to_table_no_dataset == 3
+
+
+def test_disabled_dax_is_counted_as_disabled() -> None:
+    # A DAX calculated table suppressed by config must be reported under the
+    # disabled counter, not as an unsupported non-M expression.
+    config = _config()
+    config.extract_table_to_table_lineage = False
+    child = Table(
+        name="S",
+        full_name="d1.S",
+        expression="summarize('FMS Lookup', 'FMS Lookup'[FMSID])",
+    )
+    _dataset_with_tables([child, Table(name="FMS Lookup", full_name="d1.FMS Lookup")])
+    reporter = PowerBiDashboardSourceReport()
+
+    parser.get_upstream_tables(
+        table=child,
+        reporter=reporter,
+        platform_instance_resolver=ResolvePlatformInstanceFromDatasetTypeMapping(
+            config
+        ),
+        ctx=PipelineContext(run_id="test-run-id"),
+        config=config,
+    )
+
+    assert reporter.m_query_table_to_table_disabled == 1

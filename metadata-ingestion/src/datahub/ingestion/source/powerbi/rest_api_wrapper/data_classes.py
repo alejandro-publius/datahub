@@ -272,10 +272,15 @@ def matching_sibling_tables(
     if not candidate_names or dataset is None:
         return []
 
-    by_name: Dict[str, "Table"] = {t.name.casefold(): t for t in dataset.tables}
+    # A name that normalises to several tables (e.g. `Sales` and `SALES`) is
+    # ambiguous; binding it to whichever came last would be arbitrary, so skip it.
+    by_name: Dict[str, List["Table"]] = {}
+    for table in dataset.tables:
+        by_name.setdefault(table.name.casefold(), []).append(table)
     matched: List["Table"] = []
     for name in candidate_names:
-        sibling = by_name.get(name.casefold())
+        candidates = by_name.get(name.casefold(), [])
+        sibling = candidates[0] if len(candidates) == 1 else None
         if (
             sibling is not None
             and sibling.full_name != current_table.full_name
