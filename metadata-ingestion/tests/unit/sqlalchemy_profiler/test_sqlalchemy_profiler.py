@@ -1053,3 +1053,48 @@ class TestProfilingIsolationLevelRejection:
 
         # Not degraded into an AUTOCOMMIT-unavailable failure entry.
         profiler.report.failure.assert_not_called()
+
+    def test_argument_error_default_path_surfaces_as_generic_warning(
+        self, profiler, sqlite_engine
+    ):
+        # Pins the :1858 outer-handler outcome the reworded comment describes.
+        # Under the default catch_exceptions=True, ArgumentError (itself a
+        # SQLAlchemyError) is re-raised by the inner block, caught by the outer
+        # SQLAlchemyError handler, and reported as a generic "Failed to extract
+        # statistics" warning — NOT as an AUTOCOMMIT-unavailable failure — and
+        # the table yields no profile. This is the same structural failure mode
+        # Option A guards against for environment rejections, reached via a
+        # different trigger; the test exists so the :1858 outcome is pinned as
+        # understood rather than rediscovered.
+        profiler.config.catch_exceptions = True
+        request = ProfilerRequest(
+            pretty_name="test.my_table",
+            batch_kwargs={"table": "test_table", "schema": None},
+        )
+
+        with (
+            sqlite_engine.connect() as conn,
+            patch.object(profiler, "base_engine") as mock_engine,
+            patch(
+                "datahub.ingestion.source.sqlalchemy_profiler.sqlalchemy_profiler.get_adapter"
+            ) as mock_get_adapter,
+        ):
+            mock_engine.connect.return_value.__enter__.return_value = conn
+            mock_adapter = MagicMock()
+            mock_adapter.profiling_isolation_level.return_value = "BOGUS_LEVEL"
+            mock_get_adapter.return_value = mock_adapter
+
+            result_request, result_profile = profiler._generate_profile_from_request(
+                None, request
+            )
+
+        # No profile produced — the outer handler returns None.
+        assert result_request == request
+        assert result_profile is None
+        # Not mislabelled as an AUTOCOMMIT-unavailable failure.
+        profiler.report.failure.assert_not_called()
+        # Surfaced as a generic profiling warning via the :1858 handler.
+        assert profiler.report.warning.call_count == 1
+        warning = profiler.report.warning.call_args
+        assert warning.kwargs["title"] == "Failed to extract statistics for some assets"
+        assert isinstance(warning.kwargs["exc"], sa.exc.ArgumentError)

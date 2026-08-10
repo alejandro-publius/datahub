@@ -1616,9 +1616,12 @@ class SQLAlchemyProfiler:
                             )
                         except sa.exc.ArgumentError:
                             # The dialect does not recognise the level this adapter
-                            # returned. That is an adapter bug, not an environment
-                            # condition — fail loudly rather than degrading a broken
-                            # adapter into a report entry.
+                            # returned — an adapter bug, not an environment condition.
+                            # Re-raised so it is not mislabelled as an AUTOCOMMIT
+                            # rejection. Note that under the default
+                            # catch_exceptions=True this surfaces as a generic profiling
+                            # warning (ArgumentError is itself a SQLAlchemyError); it is
+                            # loud only with catch_exceptions=False.
                             raise
                         except Exception as e:
                             # A server or proxy refused the session setting.

@@ -185,7 +185,8 @@ class PostgresAdapter(PlatformAdapter):
 
     def profiling_isolation_level(self) -> Optional[str]:
         # AUTOCOMMIT keeps each profiling SELECT self-contained; without it the
-        # transaction spans the table's profile, holding Postgres idle-in-transaction
-        # (blocking VACUUM) until pool checkin. Safe here — no setup_profiling/cleanup
-        # override, so no temp resources are created or left dangling on the connection.
+        # transaction spans the table's profile and holds Postgres
+        # idle-in-transaction (blocking VACUUM) until pool checkin. Safe here — no
+        # setup_profiling/cleanup override, so no temp resources are created or
+        # left dangling on the profiling connection.
         return "AUTOCOMMIT"
